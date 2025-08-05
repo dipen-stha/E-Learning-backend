@@ -1,8 +1,10 @@
 from sqlmodel import select, Session
+from sqlalchemy.orm import selectinload
 
 from app.api.v1.schemas.users import UserFetchSchema, UserCreateSchema
 from app.db.models.users import User, Profile
 from app.services.auth.hash import get_password_hash
+from app.services.enum.users import UserRole
 
 
 def get_user_by_id(user_id: int, db: Session) -> User | None:
@@ -31,3 +33,11 @@ def create_user(user_data: UserCreateSchema, db: Session) -> UserFetchSchema:
     db.commit()
     db.refresh(profile_instance)
     return UserFetchSchema.from_orm(user_instance)
+
+def get_user_list_by_role(user_role: UserRole or None, db: Session) -> list[UserFetchSchema]:
+    statement = select(User).join(Profile, isouter=True).where(Profile.role == user_role)
+    user_instances = db.exec(statement)
+    return [
+        UserFetchSchema.model_validate(user)
+        for user in user_instances
+    ]
