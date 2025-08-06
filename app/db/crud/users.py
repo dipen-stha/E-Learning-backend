@@ -1,8 +1,7 @@
 from sqlmodel import select, Session
-from sqlalchemy.orm import selectinload
 
-from app.api.v1.schemas.users import UserFetchSchema, UserCreateSchema
-from app.db.models.users import User, Profile
+from app.api.v1.schemas.users import UserCreateSchema, UserFetchSchema
+from app.db.models.users import Profile, User
 from app.services.auth.hash import get_password_hash
 from app.services.enum.users import UserRole
 
@@ -11,15 +10,17 @@ def get_user_by_id(user_id: int, db: Session) -> User | None:
     user = db.get(User, user_id)
     return user
 
+
 def get_user_by_username(username: str, db: Session) -> User | None:
     user = db.exec(select(User).where(User.username == username)).first()
     return user
+
 
 def create_user(user_data: UserCreateSchema, db: Session) -> UserFetchSchema:
     user_instance = User(
         email=user_data.email,
         username=user_data.username,
-        password=get_password_hash(user_data.password)
+        password=get_password_hash(user_data.password),
     )
     db.add(user_instance)
     db.flush()
@@ -34,10 +35,12 @@ def create_user(user_data: UserCreateSchema, db: Session) -> UserFetchSchema:
     db.refresh(profile_instance)
     return UserFetchSchema.from_orm(user_instance)
 
-def get_user_list_by_role(user_role: UserRole or None, db: Session) -> list[UserFetchSchema]:
-    statement = select(User).join(Profile, isouter=True).where(Profile.role == user_role)
+
+def get_user_list_by_role(
+    user_role: UserRole or None, db: Session
+) -> list[UserFetchSchema]:
+    statement = (
+        select(User).join(Profile, isouter=True).where(Profile.role == user_role)
+    )
     user_instances = db.exec(statement)
-    return [
-        UserFetchSchema.model_validate(user)
-        for user in user_instances
-    ]
+    return [UserFetchSchema.from_orm(user) for user in user_instances]

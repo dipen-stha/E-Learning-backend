@@ -1,5 +1,6 @@
 from pydantic_settings import BaseSettings
 
+
 class Settings(BaseSettings):
     DATABASE_ENGINE: str
     DATABASE_NAME: str
@@ -15,5 +16,6 @@ class Settings(BaseSettings):
     @property
     def database_url(self) -> str:
         return f"{self.DATABASE_ENGINE}://{self.DATABASE_USER}:{self.DATABASE_PASSWORD}@{self.DATABASE_HOST}/{self.DATABASE_NAME}"
+
 
 settings = Settings()
