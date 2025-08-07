@@ -1,10 +1,10 @@
 from datetime import datetime
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, field_serializer
 from sqlalchemy.exc import NoResultFound
 
 from app.api.v1.schemas.users import UserFetchSchema
-from app.api.v1.schemas.courses import CourseFetch
+from app.api.v1.schemas.courses import BaseCourse
 from app.db.models.courses import Course, Contents, Unit, Subject
 from app.db.models.users import User
 from app.services.enum.courses import CompletionStatusEnum
@@ -13,7 +13,7 @@ from app.services.utils.crud_utils import get_model_instance_by_id
 
 class BaseCommonSchema(BaseModel):
     user_id: int
-    expected_completion_time: int = Field(default=0, ge=0)
+    expected_completion_time: int = Field(ge=0)
     status: CompletionStatusEnum = Field(default=CompletionStatusEnum.IN_PROGRESS)
     started_at: datetime = Field(default_factory=datetime.now)
     completed_at: datetime | None = None
@@ -27,11 +27,14 @@ class BaseCommonSchema(BaseModel):
 
 
 class BaseCommonFetch(BaseModel):
-    user: UserFetchSchema
+    user_name: str | None
     expected_completion_time: int
     status: CompletionStatusEnum
     started_at: datetime
     completed_at: datetime | None
+
+    class Config:
+        from_attributes = True
 
 
 class BaseCommonUpdate(BaseModel):
@@ -50,7 +53,7 @@ class UserCourseCreate(BaseCommonSchema):
 
 
 class UserCourseFetch(BaseCommonFetch):
-    course: CourseFetch
+    course: BaseCourse
 
     class Config:
         from_attributes = True
@@ -65,6 +68,7 @@ class UserContentCreate(BaseCommonSchema):
         if not get_model_instance_by_id(Contents, value):
             raise NoResultFound(f"Content with id {value} not found")
         return value
+
 
 class UserUnitCreate(BaseCommonSchema):
     unit_id: int

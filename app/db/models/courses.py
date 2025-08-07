@@ -29,6 +29,7 @@ class Course(SQLModel, BaseTimeStampMixin, table=True):
         back_populates="courses", link_model=CategoryCourseLink
     )
     subjects: list["Subject"] = Relationship(back_populates="course")
+    user_courses: list["UserCourse"] = Relationship(back_populates="course")
 
     __tablename__ = "courses"
 
@@ -41,6 +42,7 @@ class Subject(SQLModel, BaseTimeStampMixin, table=True):
 
     course: Course = Relationship(back_populates="subjects")
     units: list["Unit"] = Relationship(back_populates="subject")
+    user_subjects: list["UserSubject"] = Relationship(back_populates="subject")
 
     __tablename__ = "subjects"
 
@@ -52,6 +54,7 @@ class Unit(SQLModel, BaseTimeStampMixin, table=True):
 
     subject: Subject = Relationship(back_populates="units")
     unit_contents: list["UnitContents"] = Relationship(back_populates="unit")
+    user_units: list["UserUnit"] = Relationship(back_populates="unit")
 
     __tablename__ = "units"
 
@@ -76,5 +79,6 @@ class Contents(SQLModel, BaseTimeStampMixin, table=True):
     unit_content_id: int = Field(foreign_key="unit_contents.id")
 
     unit_content: UnitContents = Relationship(back_populates="contents")
+    user_contents: list["UserContent"] = Relationship(back_populates="content")
 
     __tablename__ = "contents"

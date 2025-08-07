@@ -1,7 +1,8 @@
 from datetime import datetime
 
-from sqlmodel import Field, SQLModel
+from sqlmodel import Field, SQLModel, Relationship
 
+from app.db.models.courses import Course
 from app.services.enum.courses import CompletionStatusEnum
 from app.services.mixins.db_mixins import BaseTimeStampMixin
 
@@ -14,6 +15,9 @@ class UserCourse(SQLModel, BaseTimeStampMixin, table=True):
     started_at: datetime = Field(default_factory=datetime.now)
     completed_at: datetime = Field(nullable=True)
 
+    user: "User" = Relationship()
+    course: Course = Relationship(back_populates="user_courses")
+
     __tablename__ = "user_courses"
 
 
@@ -24,6 +28,8 @@ class UserContent(SQLModel, table=True):
     status: CompletionStatusEnum = Field(default=CompletionStatusEnum.IN_PROGRESS)
     started_at: datetime = Field(default_factory=datetime.now)
     completed_at: datetime = Field(nullable=True)
+
+    content: "Contents" = Relationship(back_populates="user_contents")
 
     __tablename__ = "user_contents"
 
@@ -36,6 +42,8 @@ class UserUnit(SQLModel, table=True):
     started_at: datetime = Field(default_factory=datetime.now)
     completed_at: datetime = Field(nullable=True)
 
+    unit: "Unit" = Relationship(back_populates="user_units")
+
     __tablename__ = "user_units"
 
 
@@ -46,3 +54,5 @@ class UserSubject(SQLModel, table=True):
     status: CompletionStatusEnum = Field(default=CompletionStatusEnum.NOT_STARTED)
     started_at: datetime = Field(default_factory=datetime.now)
     completed_at: datetime = Field(nullable=True)
+
+    subject: "Subject" = Relationship(back_populates="user_subjects")
