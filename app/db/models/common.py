@@ -30,6 +30,7 @@ class UserContent(SQLModel, table=True):
     completed_at: datetime = Field(nullable=True)
 
     content: "Contents" = Relationship(back_populates="user_contents")
+    user: "User" = Relationship()
 
     __tablename__ = "user_contents"
 
@@ -43,6 +44,7 @@ class UserUnit(SQLModel, table=True):
     completed_at: datetime = Field(nullable=True)
 
     unit: "Unit" = Relationship(back_populates="user_units")
+    user: "User" = Relationship()
 
     __tablename__ = "user_units"
 
@@ -54,5 +56,7 @@ class UserSubject(SQLModel, table=True):
     status: CompletionStatusEnum = Field(default=CompletionStatusEnum.NOT_STARTED)
     started_at: datetime = Field(default_factory=datetime.now)
     completed_at: datetime = Field(nullable=True)
+
+    user: "User" = Relationship()
 
     subject: "Subject" = Relationship(back_populates="user_subjects")

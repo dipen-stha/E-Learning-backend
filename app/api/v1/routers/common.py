@@ -15,7 +15,7 @@ from app.api.v1.schemas.common import (
     UserCourseCreate,
     UserSubjectCreate,
     BaseCommonUpdate,
-    UserCourseFetch,
+    UserCourseFetch, UserSubjectFetch,
 )
 from app.db.crud.common import (
     user_course_create,
@@ -55,7 +55,7 @@ def update_user_course(
         raise HTTPException(status_code=500, detail=str(error))
 
 
-@common_router.post("/user-subject/create/")
+@common_router.post("/user-subject/create/", response_model=UserSubjectFetch)
 def create_user_subject(
     user_subject: UserSubjectCreate, db: Annotated[Session, Depends(get_db)]
 ):

@@ -3,8 +3,9 @@ from datetime import datetime
 from pydantic import BaseModel, Field, field_validator, field_serializer
 from sqlalchemy.exc import NoResultFound
 
+from app.api.v1.schemas.courses import BaseContent, BaseUnit
 from app.api.v1.schemas.users import UserFetchSchema
-from app.api.v1.schemas.courses import BaseCourse
+from app.api.v1.schemas.courses import BaseCourse, BaseSubjectFetch
 from app.db.models.courses import Course, Contents, Unit, Subject
 from app.db.models.users import User
 from app.services.enum.courses import CompletionStatusEnum
@@ -70,6 +71,13 @@ class UserContentCreate(BaseCommonSchema):
         return value
 
 
+class UserContentFetch(BaseCommonFetch):
+    content: BaseContent
+
+    class Config:
+        from_attributes = True
+
+
 class UserUnitCreate(BaseCommonSchema):
     unit_id: int
 
@@ -81,6 +89,12 @@ class UserUnitCreate(BaseCommonSchema):
         return value
 
 
+class UserUnitFetch(BaseCommonFetch):
+    unit: BaseUnit
+
+    class Config:
+        from_attributes = True
+
 class UserSubjectCreate(BaseCommonSchema):
     subject_id: int
 
@@ -90,3 +104,10 @@ class UserSubjectCreate(BaseCommonSchema):
         if not get_model_instance_by_id(Subject, value):
             raise NoResultFound(f"Subject with id {value} not found")
         return value
+
+
+class UserSubjectFetch(BaseCommonFetch):
+    subject: BaseSubjectFetch
+
+    class Config:
+        from_attributes = True

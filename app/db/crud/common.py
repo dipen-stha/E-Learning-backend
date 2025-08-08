@@ -13,7 +13,7 @@ from app.api.v1.schemas.common import (
     UserUnitCreate,
     UserContentCreate,
     UserCourseFetch,
-    BaseCommonUpdate,
+    BaseCommonUpdate, UserSubjectFetch, UserUnitFetch, UserContentFetch,
 )
 from app.services.utils.crud_utils import create_model_instance, update_model_instance
 
@@ -22,7 +22,6 @@ def user_course_create(user_course: UserCourseCreate, db: Session) -> UserCourse
     try:
         data = user_course.model_dump()
         created_user_course_instance = create_model_instance(UserCourse, data, db)
-        # import ipdb;ipdb.set_trace()
         instance = db.exec(
             select(UserCourse)
             .options(joinedload(UserCourse.course), selectinload(UserCourse.user).selectinload(User.profile))
@@ -63,7 +62,22 @@ def user_subject_create(user_subject: UserSubjectCreate, db: Session):
     try:
         data = user_subject.model_dump()
         user_subject_instance = create_model_instance(UserSubject, data, db)
-        return user_subject_instance
+        instance = db.exec(
+            select(UserSubject).options(
+                joinedload(UserSubject.subject), selectinload(UserSubject.user).joinedload(User.profile)
+            ).where(
+                UserSubject.subject_id == user_subject_instance.subject_id,
+                UserSubject.user_id == user_subject_instance.user_id
+            )
+        ).first()
+        return UserSubjectFetch(
+            user_name=instance.user.profile.name if instance.user.profile else None,
+            subject=instance.subject,
+            expected_completion_time=instance.expected_completion_time,
+            started_at=instance.started_at,
+            status=instance.status,
+            completed_at=instance.completed_at
+        )
     except IntegrityError:
         raise HTTPException(
             status_code=409, detail="User has already started this subject!"
@@ -90,7 +104,22 @@ def user_unit_create(user_unit: UserUnitCreate, db: Session):
     try:
         data = user_unit.model_dump()
         user_unit_instance = create_model_instance(UserUnit, data, db)
-        return user_unit_instance
+        instance = db.exec(
+            select(UserUnit).options(
+                joinedload(UserUnit.unit), selectinload(UserUnit.user).joinedload(User.profile)
+            ).where(
+                UserUnit.user_id == user_unit_instance.user_id,
+                UserUnit.unit_id == user_unit_instance.unit_id
+            )
+        ).first()
+        return UserUnitFetch(
+            user_name=instance.user.profile.name if instance.user.profile else None,
+            unit=instance.unit,
+            expected_completion_time=instance.expected_completion_time,
+            started_at=instance.started_at,
+            completed_at=instance.completed_at,
+            status=instance.status
+        )
     except IntegrityError:
         raise HTTPException(
             status_code=409, detail="User has already started this unit!"
@@ -115,7 +144,22 @@ def user_content_create(user_content: UserContentCreate, db: Session):
     try:
         data = user_content.model_dump()
         user_content_instance = create_model_instance(UserContent, data, db)
-        return user_content_instance
+        instance = db.exec(
+            select(UserContent).options(
+                joinedload(UserContent.content), selectinload(UserContent.user).joinedload(User.profile)
+            ).where(
+                UserContent.user_id == user_content_instance.user_id,
+                UserContent.content_id == user_content_instance.content_id
+            )
+        ).first()
+        return UserContentFetch(
+            user_name=instance.user.profile.name if instance.user.profile else None,
+            content=instance.content,
+            expected_completion_time=instance.expected_completion_time,
+            started_at=instance.started_at,
+            status=instance.status,
+            completed_at=instance.completed_at
+        )
     except IntegrityError:
         raise HTTPException(
             status_code=409, detail="User has already started this content!"
