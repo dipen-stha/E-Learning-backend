@@ -1,7 +1,7 @@
 from datetime import datetime
 
 from fastapi import HTTPException
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, NoResultFound
 from sqlmodel import select, Session
 from sqlalchemy.orm import selectinload, joinedload
 
@@ -44,6 +44,28 @@ def user_course_create(user_course: UserCourseCreate, db: Session) -> UserCourse
         )
 
 
+def user_course_fetch(user_id: int, db: Session) -> list[UserCourseFetch]:
+    user = db.get(User, user_id)
+    if not user:
+        raise NoResultFound(f"User with id {user_id} not found")
+    statement = select(UserCourse).options(
+        joinedload(UserCourse.course), selectinload(UserCourse.user).joinedload(User.profile)
+    ).where(
+        UserCourse.user_id == user_id
+    )
+    user_courses = db.exec(statement).all()
+    return [
+        UserCourseFetch(
+            user_name=user_course.user.profile.name if user_course.user.profile else None,
+            course=user_course.course,
+            expected_completion_time=user_course.expected_completion_time,
+            status=user_course.status,
+            started_at=user_course.started_at,
+            completed_at=user_course.completed_at
+        ) for user_course in user_courses
+    ]
+
+
 def user_course_update(user_course_id: int, user_course: BaseCommonUpdate, db: Session):
     try:
         data = user_course.model_dump()
@@ -82,6 +104,27 @@ def user_subject_create(user_subject: UserSubjectCreate, db: Session):
         raise HTTPException(
             status_code=409, detail="User has already started this subject!"
         )
+
+def user_subject_fetch(user_id: int, db: Session) -> list[UserSubjectFetch]:
+    user = db.get(User, user_id)
+    if not user:
+        raise NoResultFound(f"User with id {user_id} not found")
+    statement = select(UserSubject).options(
+        joinedload(UserSubject.subject), selectinload(UserSubject.user).joinedload(User.profile)
+    ).where(
+        UserSubject.user_id == user_id
+    )
+    user_subjects = db.exec(statement).all()
+    return [
+        UserSubjectFetch(
+            user_name=user_subject.user.profile.name if user_subject.user.profile else None,
+            subject=user_subject.subject,
+            expected_completion_time=user_subject.expected_completion_time,
+            status=user_subject.status,
+            started_at=user_subject.started_at,
+            completed_at=user_subject.completed_at
+        ) for user_subject in user_subjects
+    ]
 
 
 def user_subject_update(
@@ -125,6 +168,27 @@ def user_unit_create(user_unit: UserUnitCreate, db: Session):
             status_code=409, detail="User has already started this unit!"
         )
 
+def user_unit_fetch(user_id: int, db: Session) -> list[UserUnitFetch]:
+    user = db.get(User, user_id)
+    if not user:
+        raise NoResultFound(f"User with id {user_id} not found")
+    statement = select(UserUnit).options(
+        joinedload(UserUnit.unit), selectinload(UserUnit.user).joinedload(User.profile)
+    ).where(
+        UserUnit.user_id == user_id
+    )
+    user_units = db.exec(statement).all()
+    return [
+        UserUnitFetch(
+            user_name=user_unit.user.profile.name if user_unit.user.profile else None,
+            unit=user_unit.unit,
+            expected_completion_time=user_unit.expected_completion_time,
+            status=user_unit.status,
+            started_at=user_unit.started_at,
+            completed_at=user_unit.completed_at
+        ) for user_unit in user_units
+    ]
+
 
 def user_unit_update(user_unit_id: int, user_unit: BaseCommonUpdate, db: Session):
     try:
@@ -165,6 +229,27 @@ def user_content_create(user_content: UserContentCreate, db: Session):
             status_code=409, detail="User has already started this content!"
         )
 
+
+def user_content_fetch(user_id: int, db: Session) -> list[UserContentFetch]:
+    user = db.get(User, user_id)
+    if not user:
+        raise NoResultFound(f"User with id {user_id} not found")
+    statement = select(UserContent).options(
+        joinedload(UserContent.content), selectinload(UserContent.user).joinedload(User.profile)
+    ).where(
+        UserContent.user_id == user_id
+    )
+    user_contents = db.exec(statement).all()
+    return [
+        UserContentFetch(
+            user_name=user_content.user.profile.name if user_content.user.profile else None,
+            content=user_content.content,
+            expected_completion_time=user_content.expected_completion_time,
+            status=user_content.status,
+            started_at=user_content.started_at,
+            completed_at=user_content.completed_at
+        ) for user_content in user_contents
+    ]
 
 def user_content_update(
     user_content_id: int, user_content: BaseCommonUpdate, db: Session
