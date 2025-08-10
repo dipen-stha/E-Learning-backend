@@ -15,7 +15,10 @@ from app.api.v1.schemas.common import (
     UserCourseCreate,
     UserSubjectCreate,
     BaseCommonUpdate,
-    UserCourseFetch, UserSubjectFetch, UserUnitFetch, UserContentFetch,
+    UserCourseFetch,
+    UserSubjectFetch,
+    UserUnitFetch,
+    UserContentFetch,
 )
 from app.db.crud.common import (
     user_course_create,
@@ -23,10 +26,16 @@ from app.db.crud.common import (
     user_subject_create,
     user_subject_update,
     user_unit_create,
-    user_unit_update, user_course_fetch, user_subject_fetch, user_unit_fetch, user_content_create, user_content_fetch,
+    user_unit_update,
+    user_course_fetch,
+    user_subject_fetch,
+    user_unit_fetch,
+    user_content_create,
+    user_content_fetch,
 )
+from app.services.auth.core import get_current_user
 
-common_router = APIRouter(prefix="/common", tags=["Commons"])
+common_router = APIRouter(prefix="/common", tags=["Commons"], dependencies=[Depends(get_current_user)])
 
 
 @common_router.post("/user-course/create/", response_model=UserCourseFetch)
@@ -37,21 +46,25 @@ def create_user_course(
         user_course_data = user_course_create(user_course, db)
         return user_course_data
     except ValidationError as ve:
-        return JSONResponse(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, content=jsonable_encoder({"errors": ve.errors()}))
+        return JSONResponse(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            content=jsonable_encoder({"errors": ve.errors()}),
+        )
     except Exception as error:
         raise HTTPException(status_code=500, detail=str(error))
 
 
-@common_router.get("/user-course/fetch/{user_id}/", response_model=list[UserCourseFetch])
-def fetch_user_courses(
-        user_id: int, db: Annotated[Session, Depends(get_db)]
-):
+@common_router.get(
+    "/user-course/fetch/{user_id}/", response_model=list[UserCourseFetch]
+)
+def fetch_user_courses(user_id: int, db: Annotated[Session, Depends(get_db)]):
     try:
         user_course_data = user_course_fetch(user_id, db)
         return user_course_data
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=(str(e)))
-
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={"error": f"{e}"}
+        )
 
 
 @common_router.patch("/user-course/update/update/{user_course_id}/")
@@ -78,7 +91,9 @@ def create_user_subject(
         raise HTTPException(status_code=500, detail=str(error))
 
 
-@common_router.get("/user-subject/fetch/{user_id}/", response_model=list[UserSubjectFetch])
+@common_router.get(
+    "/user-subject/fetch/{user_id}/", response_model=list[UserSubjectFetch]
+)
 def fetch_user_subject(user_id: int, db: Annotated[Session, Depends(get_db)]):
     try:
         user_subject_data = user_subject_fetch(user_id, db)
@@ -117,10 +132,12 @@ def fetch_user_unit(user_id: int, db: Annotated[Session, Depends(get_db)]):
         user_unit_data = user_unit_fetch(user_id, db)
         return user_unit_data
     except Exception as e:
-        raise HTTPException(status_code=500,  detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
 
 
-@common_router.patch("/user-unit/update/{user_unit_id}/", response_model=list[UserUnitFetch])
+@common_router.patch(
+    "/user-unit/update/{user_unit_id}/", response_model=list[UserUnitFetch]
+)
 def update_user_unit(
     user_unit_id: int,
     user_unit: BaseCommonUpdate,
@@ -134,16 +151,24 @@ def update_user_unit(
 
 
 @common_router.post("/user-content/create/", response_model=UserContentFetch)
-def create_user_content(user_content: UserContentCreate, db: Annotated[Session, Depends(get_db)]):
+def create_user_content(
+    user_content: UserContentCreate, db: Annotated[Session, Depends(get_db)]
+):
     try:
         return user_content_create(user_content, db)
     except Exception as error:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(error))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(error)
+        )
 
 
-@common_router.get("/user-content/fetch/{user_id}/", response_model=list[UserContentFetch])
+@common_router.get(
+    "/user-content/fetch/{user_id}/", response_model=list[UserContentFetch]
+)
 def fetch_user_content(user_id: int, db: Annotated[Session, Depends(get_db)]):
     try:
         return user_content_fetch(user_id, db)
     except Exception as error:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(error))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(error)
+        )

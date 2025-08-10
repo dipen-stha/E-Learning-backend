@@ -17,6 +17,8 @@ class User(SQLModel, BaseTimeStampMixin, table=True):
     is_superuser: bool = Field(default=False)
     is_active: bool = Field(default=True)
 
+    user_courses: list["UserCourse"] = Relationship(back_populates="user")
+
     __tablename__ = "users"
 
 

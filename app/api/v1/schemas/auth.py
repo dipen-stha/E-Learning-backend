@@ -7,6 +7,10 @@ class Token(BaseModel):
     token_type: str
 
 
+class TokenRefreshData(BaseModel):
+    refresh_token: str = None
+
+
 class TokenData(BaseModel):
     username: str | None = None
     scopes: list[str] = []
