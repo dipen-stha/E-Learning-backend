@@ -56,6 +56,8 @@ class UserCourseCreate(BaseCommonSchema):
 class UserCourseFetch(BaseCommonFetch):
     course: BaseCourse
 
+    completion_percent: float | None = None
+
     class Config:
         from_attributes = True
 
@@ -91,9 +93,11 @@ class UserUnitCreate(BaseCommonSchema):
 
 class UserUnitFetch(BaseCommonFetch):
     unit: BaseUnit
+    completion_percent: float | None
 
     class Config:
         from_attributes = True
+
 
 class UserSubjectCreate(BaseCommonSchema):
     subject_id: int
@@ -108,6 +112,7 @@ class UserSubjectCreate(BaseCommonSchema):
 
 class UserSubjectFetch(BaseCommonFetch):
     subject: BaseSubjectFetch
+    completion_percent: float | None
 
     class Config:
         from_attributes = True

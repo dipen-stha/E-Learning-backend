@@ -2,13 +2,14 @@ from datetime import datetime, timedelta
 from typing import Annotated
 
 import jwt
-from jwt import InvalidTokenError
+from jwt import InvalidTokenError, ExpiredSignatureError
 from pydantic import ValidationError
 from sqlmodel import Session
 
 from app.api.v1.schemas.auth import TokenData
 from app.db.crud.users import get_user_by_username
 from app.db.models.users import User
+from app.db.session.session import get_db
 from app.services.auth.hash import verify_password
 from config import settings
 
@@ -41,17 +42,36 @@ def create_tokens(data: dict) -> (str, str):
     to_encode = data.copy()
     access_expire = datetime.now() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     refresh_expire = datetime.now() + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
-    to_encode.update({"exp": access_expire, "type": "access"})
+    print(datetime.now().timestamp(), refresh_expire.timestamp())
+    to_encode.update({"exp": access_expire.timestamp(), "type": "access"})
     access_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-    to_encode.update({"exp": refresh_expire, "type": "refresh"})
+    to_encode.update({"exp": refresh_expire.timestamp(), "type": "refresh"})
     refresh_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return access_jwt, refresh_jwt
+
+
+def create_access_token(refresh_token: str, db: Session) -> str:
+    try:
+        access_expire = datetime.now() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+        decoded_data = jwt.decode(refresh_token, SECRET_KEY, algorithms=[ALGORITHM], options={"verify_signature": True, "verify_exp": True})
+        print(decoded_data["exp"])
+        to_encode = {
+            "sub": decoded_data["sub"],
+            "exp": access_expire.timestamp(),
+            "type": "access"
+        }
+        access_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+        return access_jwt
+    except ExpiredSignatureError:
+        raise
+    except InvalidTokenError:
+        raise
 
 
 async def get_current_user(
     security_scopes: SecurityScopes,
     token: Annotated[str, Depends(oauth2_scheme)],
-    db: Session,
+    db: Annotated[Session, Depends(get_db)],
 ):
     if security_scopes.scopes:
         authenticate_value = f"Bearer scope={security_scopes.scope_str}"
@@ -59,7 +79,7 @@ async def get_current_user(
         authenticate_value = "Bearer"
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
+        detail="User is not authenticated",
         headers={"WWW-Authenticate": authenticate_value},
     )
     try:
@@ -71,7 +91,7 @@ async def get_current_user(
         token_data = TokenData(scopes=token_scopes, username=username)
     except (InvalidTokenError, ValidationError):
         raise credentials_exception
-    user, _ = get_user_by_username(username, db)
+    user = get_user_by_username(username, db)
     if user is None:
         raise credentials_exception
     for scope in security_scopes.scopes:

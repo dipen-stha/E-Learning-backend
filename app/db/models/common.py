@@ -15,7 +15,7 @@ class UserCourse(SQLModel, BaseTimeStampMixin, table=True):
     started_at: datetime = Field(default_factory=datetime.now)
     completed_at: datetime = Field(nullable=True)
 
-    user: "User" = Relationship()
+    user: "User" = Relationship(back_populates="user_courses")
     course: Course = Relationship(back_populates="user_courses")
 
     __tablename__ = "user_courses"
