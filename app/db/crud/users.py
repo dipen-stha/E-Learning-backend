@@ -1,4 +1,5 @@
 from sqlmodel import select, Session
+from sqlalchemy.orm import joinedload
 
 from app.api.v1.schemas.users import UserCreateSchema, UserFetchSchema
 from app.db.models.users import Profile, User
@@ -6,9 +7,9 @@ from app.services.auth.hash import get_password_hash
 from app.services.enum.users import UserRole
 
 
-def get_user_by_id(user_id: int, db: Session) -> User | None:
-    user = db.get(User, user_id)
-    return user
+def get_user_by_id(user_id: int, db: Session) -> UserFetchSchema | None:
+    user = db.exec(select(User).options(joinedload(User.profile)).where(User.id == user_id)).first()
+    return UserFetchSchema.from_orm(user)
 
 
 def get_user_by_username(username: str, db: Session) -> User | None:
