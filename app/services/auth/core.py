@@ -42,7 +42,6 @@ def create_tokens(data: dict) -> (str, str):
     to_encode = data.copy()
     access_expire = datetime.now() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     refresh_expire = datetime.now() + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
-    print(datetime.now().timestamp(), refresh_expire.timestamp())
     to_encode.update({"exp": access_expire.timestamp(), "type": "access"})
     access_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     to_encode.update({"exp": refresh_expire.timestamp(), "type": "refresh"})
@@ -54,7 +53,6 @@ def create_access_token(refresh_token: str, db: Session) -> str:
     try:
         access_expire = datetime.now() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
         decoded_data = jwt.decode(refresh_token, SECRET_KEY, algorithms=[ALGORITHM], options={"verify_signature": True, "verify_exp": True})
-        print(decoded_data["exp"])
         to_encode = {
             "sub": decoded_data["sub"],
             "exp": access_expire.timestamp(),
