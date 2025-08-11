@@ -4,6 +4,8 @@ from jwt import ExpiredSignatureError, InvalidTokenError
 from sqlmodel import Session
 
 from app.api.v1.schemas.auth import Token, TokenRefreshData
+from app.api.v1.schemas.users import UserFetchSchema
+from app.db.models.users import User
 from app.db.session.session import get_db
 from app.services.auth.core import authenticate_user, create_tokens, create_access_token, get_current_user
 
@@ -51,3 +53,9 @@ def refresh(token_data: TokenRefreshData, db: Annotated[Session, Depends(get_db)
         raise HTTPException(status_code=401, detail="Given token is invalid")
     except Exception as e:
         raise HTTPException(status_code=401, detail="User is not authenticated")
+
+
+@auth_router.get("/me/", response_model=UserFetchSchema, dependencies=[Depends(get_current_user)])
+def get_authenticate_user(user = Annotated[User, Depends(get_current_user)]):
+    user = UserFetchSchema.model_validate(user)
+    return user
