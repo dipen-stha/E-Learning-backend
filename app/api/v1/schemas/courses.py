@@ -43,6 +43,7 @@ class CourseFetch(BaseCourse):
 class SubjectCreate(Base):
     completion_time: int
     course_id: int
+    order: int
 
 
 class BaseSubjectFetch(Base):
@@ -55,6 +56,7 @@ class BaseSubjectFetch(Base):
 class SubjectFetch(BaseSubjectFetch):
     completion_time: int = Field(default=0, ge=0)
     course: BaseCourse
+    order: int | None
 
     @staticmethod
     def from_orm(subject: Subject):
@@ -63,11 +65,13 @@ class SubjectFetch(BaseSubjectFetch):
             title=subject.title,
             completion_time=subject.completion_time,
             course=BaseCourse.model_validate(subject.course),
+            order=subject.order,
         )
 
 
 class UnitCreate(Base):
     subject_id: int
+    order: int
 
 
 class BaseUnit(Base):
@@ -80,6 +84,7 @@ class BaseUnit(Base):
 class UnitFetch(BaseUnit):
     id: int
     subject: BaseSubjectFetch | None
+    order: int | None
 
     @staticmethod
     def from_orm(unit: Unit):
@@ -87,12 +92,14 @@ class UnitFetch(BaseUnit):
             id=unit.id,
             title=unit.title,
             subject=BaseSubjectFetch.model_validate(unit.subject),
+            order=unit.order,
         )
 
 
 class UnitUpdate(BaseModel):
     title: str | None = None
     subject_id: int | None = None
+    order: int | None = None
 
 
 class BaseUnitContent(Base):
@@ -106,11 +113,13 @@ class BaseUnitContent(Base):
 class UnitContentCreate(Base):
     unit_id: int
     completion_time: int = Field(default=None, ge=0)
+    order: int
 
 
 class UnitContentFetch(BaseUnitContent):
     completion_time: int
     course: BaseCourse
+    order: int | None
 
     @classmethod
     def from_orm(unit_content: UnitContents):
@@ -119,6 +128,7 @@ class UnitContentFetch(BaseUnitContent):
             title=unit_content.title,
             completion_time=unit_content.completion_time,
             course=BaseCourse.model_validate(unit_content.course),
+            order=unit_content.order,
         )
 
 
@@ -126,6 +136,7 @@ class UnitContentUpdate(BaseModel):
     title: str | None = None
     completion_time: int | None = Field(default=None, ge=0)
     unit_id: int | None = None
+    order: int | None = None
 
 
 class BaseContent(Base):
@@ -135,11 +146,13 @@ class BaseContent(Base):
 class ContentCreate(Base):
     unit_id: int
     completion_time: int = Field(default=None, ge=0)
+    order: int
 
 
 class ContentFetch(BaseContent):
     completion_time: int
     unit: BaseUnit
+    order: int | None
 
     class Config:
         from_attributes = True
@@ -151,6 +164,7 @@ class ContentFetch(BaseContent):
             title=content.title,
             unit=BaseUnit.model_validate(content.unit),
             completion_time=content.completion_time,
+            order = content.order
         )
 
 
@@ -158,3 +172,4 @@ class ContentUpdate(BaseModel):
     completion_time: int | None = None
     unit_id: int | None = None
     title: str | None = None
+    order: int | None = None

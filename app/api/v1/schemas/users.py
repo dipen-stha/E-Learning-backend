@@ -15,9 +15,19 @@ class UserCreateSchema(BaseModel):
     dob: date
 
 
+class ProfileSchema(BaseModel):
+    name: str
+    dob: date
+    gender: UserGender
+
+    class Config:
+        from_attributes = True
+
+
+
 class UserFetchSchema(BaseModel):
     id: int | None
-    profile: "ProfileSchema"
+    profile: ProfileSchema | None
     email: str
     username: str
 
@@ -29,15 +39,6 @@ class UserFetchSchema(BaseModel):
             email=user.email,
             username=user.username,
         )
-
-    class Config:
-        from_attributes = True
-
-
-class ProfileSchema(BaseModel):
-    name: str
-    dob: date
-    gender: UserGender
 
     class Config:
         from_attributes = True

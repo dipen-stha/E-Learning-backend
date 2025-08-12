@@ -2,6 +2,7 @@ from datetime import date
 
 from sqlmodel import Field, Relationship, SQLModel
 
+from app.db.models.common import UserCourse, UserContent, UserSubject, UserUnit
 from app.services.enum.users import UserGender, UserRole
 from app.services.mixins.db_mixins import BaseTimeStampMixin
 
@@ -17,7 +18,12 @@ class User(SQLModel, BaseTimeStampMixin, table=True):
     is_superuser: bool = Field(default=False)
     is_active: bool = Field(default=True)
 
-    user_courses: list["UserCourse"] = Relationship(back_populates="user")
+    # user_courses: list["Course"] = Relationship(back_populates="users", link_model=UserCourse)
+    # user_units: list["Unit"] = Relationship(back_populates="users", link_model=UserUnit)
+    # user_subjects: list["Subject"] = Relationship(back_populates="users", link_model=UserSubject)
+    # user_contents: list["Contents"] = Relationship(back_populates="users", link_model=UserContent)
+
+    user_course_links: list[UserCourse] = Relationship(back_populates="user")
 
     __tablename__ = "users"
 
