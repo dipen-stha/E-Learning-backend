@@ -16,6 +16,8 @@ class CategoryFetch(Base):
 
 class CourseCreate(Base):
     categories_id: list[int]
+    price: float = Field(ge=0)
+    completion_time: int = Field(ge=0)
 
 
 class BaseCourse(Base):
@@ -29,6 +31,8 @@ class BaseCourse(Base):
 class CourseFetch(BaseCourse):
     id: int
     title: str
+    price: float
+    completion_time: int
     categories: list[str]
 
     @staticmethod
@@ -37,6 +41,8 @@ class CourseFetch(BaseCourse):
             id=course.id,
             title=course.title,
             categories=[category.title for category in course.categories],
+            price=course.price,
+            completion_time=course.completion_time
         )
 
 

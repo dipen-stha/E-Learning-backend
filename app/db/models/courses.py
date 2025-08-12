@@ -25,6 +25,8 @@ class Category(SQLModel, BaseTimeStampMixin, table=True):
 class Course(SQLModel, BaseTimeStampMixin, table=True):
     id: int | None = Field(default=None, primary_key=True)
     title: str = Field(max_length=255)
+    price: float | None = Field(nullable=True, ge=0)
+    completion_time: int | None = Field(nullable=True, ge=0)
 
     categories: list[Category] = Relationship(
         back_populates="courses", link_model=CategoryCourseLink
@@ -32,6 +34,7 @@ class Course(SQLModel, BaseTimeStampMixin, table=True):
     subjects: list["Subject"] = Relationship(back_populates="course")
     # users: list["User"] = Relationship(back_populates="user_courses", link_model=UserCourse)
     user_course_links: list["UserCourse"] = Relationship(back_populates="course")
+    ratings: list["CourseRating"] = Relationship(back_populates="rated_course")
 
     __tablename__ = "courses"
 
@@ -53,6 +56,7 @@ class Subject(SQLModel, BaseTimeStampMixin, table=True):
 class Unit(SQLModel, BaseTimeStampMixin, table=True):
     id: int | None = Field(default=None, primary_key=True)
     title: str = Field(max_length=255)
+    completion_time: int | None = Field(nullable=True, ge=0)
     subject_id: int = Field(foreign_key="subjects.id")
     order: int | None = Field(ge=0, nullable=True)
 
@@ -88,3 +92,16 @@ class Contents(SQLModel, BaseTimeStampMixin, table=True):
     # users: list["User"] = Relationship(back_populates="user_contents", link_model=UserContent)
 
     __tablename__ = "contents"
+
+
+class CourseRating(SQLModel, BaseTimeStampMixin, table=True):
+    id: int | None = Field(default=None, primary_key=True)
+    course_id: int = Field(foreign_key="courses.id")
+    user_id: int = Field(foreign_key="users.id")
+    rating: int = Field(ge=0)
+    remarks: str | None
+
+    rated_by: "User" = Relationship(back_populates="user_ratings")
+    rated_course: Course = Relationship(back_populates="ratings")
+
+    __tablename__ = "course_ratings"

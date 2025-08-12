@@ -24,6 +24,7 @@ class User(SQLModel, BaseTimeStampMixin, table=True):
     # user_contents: list["Contents"] = Relationship(back_populates="users", link_model=UserContent)
 
     user_course_links: list[UserCourse] = Relationship(back_populates="user")
+    user_ratings: list["CourseRating"] = Relationship(back_populates="rated_by")
 
     __tablename__ = "users"
 
