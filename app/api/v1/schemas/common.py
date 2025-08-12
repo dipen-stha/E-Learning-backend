@@ -55,6 +55,7 @@ class UserCourseCreate(BaseCommonSchema):
 
 class UserCourseFetch(BaseCommonFetch):
     course: BaseCourse
+    next_subject: str | None = None
 
     completion_percent: float | None = None
 

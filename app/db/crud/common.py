@@ -2,7 +2,7 @@ from datetime import datetime
 
 from fastapi import HTTPException
 from sqlalchemy.exc import IntegrityError, NoResultFound
-from sqlmodel import select, Session, func
+from sqlmodel import select, Session, func, asc
 from sqlalchemy.orm import selectinload, joinedload
 from sqlalchemy.types import Integer
 from sqlmodel.sql import expression
@@ -58,6 +58,18 @@ def user_course_fetch(user_id: int, db: Session) -> list[UserCourseFetch]:
     user = db.get(User, user_id)
     if not user:
         raise NoResultFound(f"User with id {user_id} not found")
+    subject_statement = (
+        select(Subject.title).join(
+            UserSubject,
+            (UserSubject.subject_id == Subject.id) & (UserSubject.user_id == user_id), isouter=True
+        ).where(
+            Subject.order != None,
+            Subject.course_id == UserCourse.course_id,
+            UserSubject.completed_at == None,
+        ).order_by(asc(Subject.order))
+        .limit(1)
+        .scalar_subquery()
+    )
     statement = (
         select(
             UserCourse,
@@ -67,13 +79,14 @@ def user_course_fetch(user_id: int, db: Session) -> list[UserCourseFetch]:
                     UserSubject.status == CompletionStatusEnum.COMPLETED, Integer
                 )
             ).label("completed_counts"),
+            subject_statement.label("next_subject")
         )
         .select_from(UserCourse)
         .join(Course, UserCourse.course_id == Course.id)
         .join(Subject, Subject.course_id == Course.id)
         .outerjoin(UserSubject)
         .where(UserCourse.user_id == user_id)
-        .group_by(UserCourse)
+        .group_by(UserCourse.user_id, UserCourse.course_id)
     )
     user_courses = db.exec(statement).all()
     return [
@@ -87,8 +100,9 @@ def user_course_fetch(user_id: int, db: Session) -> list[UserCourseFetch]:
             started_at=user_course.started_at,
             completed_at=user_course.completed_at,
             completion_percent=(completed_subjects / total_subjects) * 100,
+            next_subject=next_subject
         )
-        for user_course, total_subjects, completed_subjects in user_courses
+        for user_course, total_subjects, completed_subjects, next_subject in user_courses
     ]
 
 
