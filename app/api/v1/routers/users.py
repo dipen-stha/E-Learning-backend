@@ -10,16 +10,15 @@ from app.db.session.session import get_db
 from app.services.auth.permissions_mixins import IsAdmin, IsAuthenticated
 from app.services.enum.users import UserRole
 
-from fastapi import APIRouter, Depends, HTTPException
-
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 
 user_router = APIRouter(prefix="/users", tags=["Users"])
 
 
 @user_router.post("/create/", response_model=UserFetchSchema)
-def user_create(user: UserCreateSchema, db: Annotated[Session, Depends(get_db)]):
+def user_create(user: UserCreateSchema, db: Annotated[Session, Depends(get_db)], image: UploadFile = File(...)):
     try:
-        return create_user(user, db)
+        return create_user(user, db, image)
     except IntegrityError:
         raise HTTPException(status_code=500, detail="User already exists")
     except ValidationError as e:

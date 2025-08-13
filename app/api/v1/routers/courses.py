@@ -18,7 +18,7 @@ from app.api.v1.schemas.courses import (
     UnitContentUpdate,
     UnitCreate,
     UnitFetch,
-    UnitUpdate,
+    UnitUpdate, BaseCourse, CourseUpdate,
 )
 from app.db.crud.courses import (
     content_create,
@@ -33,12 +33,11 @@ from app.db.crud.courses import (
     unit_content_create,
     unit_content_update,
     unit_create,
-    unit_update,
+    unit_update, course_update, course_fetch_by_id,
 )
 from app.db.session.session import get_db
 
-from fastapi import APIRouter, Depends, HTTPException
-
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 
 course_router = APIRouter(prefix="/courses", tags=["Courses"])
 
@@ -56,16 +55,44 @@ def get_all_courses(db: Annotated[Session, Depends(get_db)]):
     try:
         return list_all_courses(db)
     except Exception as error:
-        raise HTTPException(status_code=500, detail=str(error))
+        raise HTTPException(status_code=500, detail={
+            "error_type": error.__class__.__name__,
+            "error_message": str(error)
+        })
 
 
 @course_router.post("/create/", response_model=CourseFetch)
-def create_course(course: CourseCreate, db: Annotated[Session, Depends(get_db)]):
+def create_course(
+        course: CourseCreate,
+        db: Annotated[Session, Depends(get_db)],
+        file: UploadFile = File(...)
+):
     try:
-        return course_create(course, db)
+        return course_create(course, db, file)
     except Exception as error:
         raise HTTPException(status_code=500, detail=str(error))
 
+
+@course_router.patch("/update/{course_id}/", response_model=BaseCourse)
+async def update_course(course_id:int, db: Annotated[Session, Depends(get_db)], file: UploadFile = File(...)):
+    try:
+        return await course_update(course_id, db, file)
+    except Exception as error:
+        raise HTTPException(status_code=500, detail={
+            "error_type": error.__class__.__name__,
+            "error_message": str(error)
+        })
+
+
+@course_router.get("/get/{course_id}/")
+def get_course_by_id(course_id: int, db: Annotated[Session, Depends(get_db)]):
+    try:
+        return course_fetch_by_id(course_id, db)
+    except Exception as error:
+        raise HTTPException(status_code=500, detail={
+            "error_type": error.__class__.__name__,
+            "error_message": str(error)
+        })
 
 @course_router.post("/subject/create/", response_model=SubjectFetch)
 def create_subject(subject: SubjectCreate, db: Annotated[Session, Depends(get_db)]):

@@ -8,6 +8,7 @@ from pydantic import ValidationError
 from sqlmodel import Session
 from sqlalchemy.exc import IntegrityError
 
+from app.db.models.users import User
 from app.db.session.session import get_db
 from app.api.v1.schemas.common import (
     UserUnitCreate,
@@ -18,7 +19,7 @@ from app.api.v1.schemas.common import (
     UserCourseFetch,
     UserSubjectFetch,
     UserUnitFetch,
-    UserContentFetch,
+    UserContentFetch, UserCourseStats,
 )
 from app.db.crud.common import (
     user_course_create,
@@ -31,7 +32,7 @@ from app.db.crud.common import (
     user_subject_fetch,
     user_unit_fetch,
     user_content_create,
-    user_content_fetch,
+    user_content_fetch, user_course_stats, user_course_fetch_by_id,
 )
 from app.services.auth.core import get_current_user
 
@@ -66,6 +67,32 @@ def fetch_user_courses(user_id: int, db: Annotated[Session, Depends(get_db)]):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={"error": f"{e}"}
         )
 
+
+@common_router.get(
+    "/user-course/fetch-by-course/{course_id}/"
+)
+def fetch_user_course_by_course_id(course_id:int, db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(get_current_user)]):
+    try:
+        return user_course_fetch_by_id(course_id, user, db)
+    except Exception as error:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={
+                "error_type": error.__class__.__name__,
+                "error_message": str(error),
+            }
+        )
+
+@common_router.get("/user-course/fetch-user-stats/{user_id}/", response_model=UserCourseStats)
+def fetch_user_course_stats(user_id: int, db: Annotated[Session, Depends(get_db)]):
+    try:
+        return user_course_stats(user_id, db)
+    except Exception as error:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={
+                "error_type": error.__class__.__name__,
+                "error_message": str(error)
+            }
+        )
 
 @common_router.patch("/user-course/update/update/{user_course_id}/")
 def update_user_course(
