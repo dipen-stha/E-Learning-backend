@@ -59,9 +59,16 @@ class UserCourseFetch(BaseCommonFetch):
 
     completion_percent: float | None = None
 
+    total_subjects: int | None = None
+    completed_subjects: int | None = None
+
     class Config:
         from_attributes = True
 
+
+class UserCourseStats(BaseModel):
+    courses_enrolled: int
+    completed_courses: int
 
 class UserContentCreate(BaseCommonSchema):
     content_id: int

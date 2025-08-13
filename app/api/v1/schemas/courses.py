@@ -13,11 +13,17 @@ class CategoryFetch(Base):
     class Config:
         from_attributes = True
 
+class CourseUpdate(BaseModel):
+    title: str | None = None
+    categories_id: list[int] | None = None
+    instructor_id: int | None = None
+
 
 class CourseCreate(Base):
     categories_id: list[int]
     price: float = Field(ge=0)
     completion_time: int = Field(ge=0)
+    instructor_id: int
 
 
 class BaseCourse(Base):
@@ -32,8 +38,13 @@ class CourseFetch(BaseCourse):
     id: int
     title: str
     price: float
+    description: str | None = None
     completion_time: int
+    student_count: int | None = Field(ge=0, nullable=True)
+    course_rating: float | None = Field(ge=0, nullable=True)
+    instructor: str | None
     categories: list[str]
+    image_url: str | None
 
     @staticmethod
     def from_orm(course: Course):
@@ -44,7 +55,6 @@ class CourseFetch(BaseCourse):
             price=course.price,
             completion_time=course.completion_time
         )
-
 
 class SubjectCreate(Base):
     completion_time: int
@@ -57,6 +67,16 @@ class BaseSubjectFetch(Base):
 
     class Config:
         from_attributes = True
+
+
+class SubjectDetailsFetch(BaseModel):
+    id: int
+    title: str
+    total_units: int | None = Field(ge=0)
+    completion_time: int
+    completed_units: int | None = None
+    units: list["UnitFetchBase"]
+    progress: int | None = None
 
 
 class SubjectFetch(BaseSubjectFetch):
@@ -73,6 +93,12 @@ class SubjectFetch(BaseSubjectFetch):
             course=BaseCourse.model_validate(subject.course),
             order=subject.order,
         )
+
+
+class UnitFetchBase(BaseModel):
+    id: int
+    title: str
+    is_completed: bool
 
 
 class UnitCreate(Base):

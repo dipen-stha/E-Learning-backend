@@ -1,6 +1,7 @@
 from starlette.middleware.cors import CORSMiddleware
 from starlette.middleware.gzip import GZipMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
+from starlette.staticfiles import StaticFiles
 
 from app.api.v1.routers.auth import auth_router
 from app.api.v1.routers.courses import course_router
@@ -32,3 +33,5 @@ app.include_router(auth_router)
 app.include_router(user_router)
 app.include_router(course_router)
 app.include_router(common_router)
+
+app.mount("/media", StaticFiles(directory="media"), name="media")

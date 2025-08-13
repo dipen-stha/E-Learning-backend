@@ -2,7 +2,7 @@ from datetime import datetime
 
 from fastapi import HTTPException
 from sqlalchemy.exc import IntegrityError, NoResultFound
-from sqlmodel import select, Session, func, asc
+from sqlmodel import select, Session, func, asc, and_
 from sqlalchemy.orm import selectinload, joinedload
 from sqlalchemy.types import Integer
 from sqlmodel.sql import expression
@@ -19,10 +19,11 @@ from app.api.v1.schemas.common import (
     BaseCommonUpdate,
     UserSubjectFetch,
     UserUnitFetch,
-    UserContentFetch,
+    UserContentFetch, UserCourseStats,
 )
 from app.services.enum.courses import CompletionStatusEnum
 from app.services.utils.crud_utils import create_model_instance, update_model_instance
+from app.services.utils.files import format_file_path
 
 
 def user_course_create(user_course: UserCourseCreate, db: Session) -> UserCourseFetch:
@@ -105,6 +106,57 @@ def user_course_fetch(user_id: int, db: Session) -> list[UserCourseFetch]:
         for user_course, total_subjects, completed_subjects, next_subject in user_courses
     ]
 
+def user_course_fetch_by_id(course_id:int, user: User, db: Session) -> UserCourseFetch | None:
+    user_course = db.get(User, course_id)
+    if not user_course:
+        raise NoResultFound(f"User with id {course_id} not found")
+    user_id = user.id
+    subject_subquery = ((
+        select(Subject.title)
+        .join(UserSubject, and_(UserSubject.subject_id == Subject.id, UserSubject.user_id == user_id), isouter=True)
+        ).where(
+            Subject.order != None,
+            UserSubject.completed_at == None,
+            Subject.course_id == course_id
+        )
+        .order_by(Subject.order)
+        .limit(1)
+        .scalar_subquery()
+        )
+    main_statement = (
+        select(
+            UserCourse,
+            func.count(Subject.id).label("total_subjects"),
+            func.count(Subject.id).filter(UserSubject.status == CompletionStatusEnum.COMPLETED).label("completed_counts"),
+            subject_subquery.label("next_subject")
+        )
+        .join(Course, Course.id == UserCourse.course_id)
+        .join(Subject)
+        .outerjoin(UserSubject, Subject.id == UserSubject.subject_id)
+        .options(selectinload(UserCourse.user).selectinload(User.profile))
+        .where(UserCourse.user_id == user_id)
+        .group_by(UserCourse.user_id, UserCourse.course_id)
+    )
+    user_course_exc = db.exec(main_statement).first()
+    if not user_course_exc:
+        return None
+    user_course, total_subjects, completed_counts, next_subject = user_course_exc
+    return UserCourseFetch(
+            user_name=(
+                user_course.user.profile.name if user_course.user.profile else None
+            ),
+            course=user_course.course,
+            expected_completion_time=user_course.expected_completion_time,
+            status=user_course.status,
+            started_at=user_course.started_at,
+            completed_at=user_course.completed_at,
+            completion_percent=(completed_counts / total_subjects) * 100 if total_subjects else 0,
+            next_subject=next_subject,
+            total_subjects=total_subjects,
+            completed_subjects=completed_counts,
+    )
+
+
 
 def user_course_update(user_course_id: int, user_course: BaseCommonUpdate, db: Session):
     try:
@@ -147,6 +199,21 @@ def user_subject_create(user_subject: UserSubjectCreate, db: Session):
         raise HTTPException(
             status_code=409, detail="User has already started this subject!"
         )
+
+
+def user_course_stats(user_id: int, db: Session)-> UserCourseStats:
+    statement = (
+        select(
+            func.count(UserCourse.course_id).label("courses_enrolled"),
+            func.count(UserCourse.course_id).filter(UserCourse.status == CompletionStatusEnum.COMPLETED).label("completed_courses"),
+        ).select_from(User)
+        .join(UserCourse, UserCourse.user_id == User.id)
+    )
+    stats = db.exec(statement).all()
+    return UserCourseStats(
+        completed_courses=stats[0].completed_courses,
+        courses_enrolled=stats[0].courses_enrolled,
+    )
 
 
 def user_subject_fetch(user_id: int, db: Session) -> list[UserSubjectFetch]:
