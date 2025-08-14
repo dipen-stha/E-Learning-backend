@@ -19,10 +19,10 @@ class ProfileSchema(BaseModel):
     name: str
     dob: date
     gender: UserGender
+    avatar: str | None = None
 
     class Config:
         from_attributes = True
-
 
 
 class UserFetchSchema(BaseModel):

@@ -1,7 +1,4 @@
-from sqlmodel import SQLModel, Field, Relationship
 
-from app.services.enum.courses import PaymentMethod
-from app.services.mixins.db_mixins import BaseTimeStampMixin
 
 
 # class UserCourseEnrollment(SQLModel, BaseTimeStampMixin, table=True):

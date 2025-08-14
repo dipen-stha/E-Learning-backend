@@ -1,6 +1,8 @@
 from pydantic import BaseModel, Field
 
-from app.db.models.courses import Contents, Course, Subject, Unit, UnitContents
+from app.api.v1.schemas.users import ProfileSchema
+from app.db.models.courses import Contents, Subject, Unit, UnitContents
+from app.services.enum.courses import ContentTypeEnum
 
 
 class Base(BaseModel):
@@ -12,6 +14,7 @@ class CategoryFetch(Base):
 
     class Config:
         from_attributes = True
+
 
 class CourseUpdate(BaseModel):
     title: str | None = None
@@ -40,21 +43,16 @@ class CourseFetch(BaseCourse):
     price: float
     description: str | None = None
     completion_time: int
-    student_count: int | None = Field(ge=0, nullable=True)
-    course_rating: float | None = Field(ge=0, nullable=True)
-    instructor: str | None
-    categories: list[str]
+    instructor: ProfileSchema | None
     image_url: str | None
 
-    @staticmethod
-    def from_orm(course: Course):
-        return CourseFetch(
-            id=course.id,
-            title=course.title,
-            categories=[category.title for category in course.categories],
-            price=course.price,
-            completion_time=course.completion_time
-        )
+
+class CourseDetailFetch(CourseFetch):
+    student_count: int | None
+    course_rating: float | None
+    categories: list[str]
+    subjects: list["SubjectFetch"] = []
+
 
 class SubjectCreate(Base):
     completion_time: int
@@ -81,8 +79,12 @@ class SubjectDetailsFetch(BaseModel):
 
 class SubjectFetch(BaseSubjectFetch):
     completion_time: int = Field(default=0, ge=0)
-    course: BaseCourse
+    course: BaseCourse | None = None
     order: int | None
+    units: list[str] | list["UserUnitDetail"] = []
+    total_units: int | None = None
+    completed_units: int | None = None
+    completion_percent: float | None = None
 
     @staticmethod
     def from_orm(subject: Subject):
@@ -126,6 +128,11 @@ class UnitFetch(BaseUnit):
             subject=BaseSubjectFetch.model_validate(unit.subject),
             order=unit.order,
         )
+
+
+class UserUnitDetail(Base):
+    id: int
+    is_completed: bool = False
 
 
 class UnitUpdate(BaseModel):
@@ -176,28 +183,21 @@ class BaseContent(Base):
 
 
 class ContentCreate(Base):
-    unit_id: int
     completion_time: int = Field(default=None, ge=0)
     order: int
+    description: str | None
+    content_type: ContentTypeEnum
 
 
 class ContentFetch(BaseContent):
     completion_time: int
-    unit: BaseUnit
     order: int | None
+    description: str | None = None
+    content_type: ContentTypeEnum
+    file_url: str | None = None
 
     class Config:
         from_attributes = True
-
-    @staticmethod
-    def from_orm(content: Contents):
-        return ContentFetch(
-            id=content.id,
-            title=content.title,
-            unit=BaseUnit.model_validate(content.unit),
-            completion_time=content.completion_time,
-            order = content.order
-        )
 
 
 class ContentUpdate(BaseModel):

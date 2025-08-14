@@ -10,13 +10,18 @@ from app.db.session.session import get_db
 from app.services.auth.permissions_mixins import IsAdmin, IsAuthenticated
 from app.services.enum.users import UserRole
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+
 
 user_router = APIRouter(prefix="/users", tags=["Users"])
 
 
 @user_router.post("/create/", response_model=UserFetchSchema)
-def user_create(user: UserCreateSchema, db: Annotated[Session, Depends(get_db)], image: UploadFile = File(...)):
+def user_create(
+    user: UserCreateSchema,
+    db: Annotated[Session, Depends(get_db)],
+    image: UploadFile = File(...),
+):
     try:
         return create_user(user, db, image)
     except IntegrityError:

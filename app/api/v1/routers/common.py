@@ -1,42 +1,47 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.responses import JSONResponse
-from fastapi.encoders import jsonable_encoder
 from pydantic import ValidationError
-
 from sqlmodel import Session
-from sqlalchemy.exc import IntegrityError
 
-from app.db.models.users import User
-from app.db.session.session import get_db
 from app.api.v1.schemas.common import (
-    UserUnitCreate,
-    UserContentCreate,
-    UserCourseCreate,
-    UserSubjectCreate,
     BaseCommonUpdate,
+    UserContentCreate,
+    UserContentFetch,
+    UserCourseCreate,
     UserCourseFetch,
+    UserCourseStats,
+    UserSubjectCreate,
     UserSubjectFetch,
+    UserUnitCreate,
     UserUnitFetch,
-    UserContentFetch, UserCourseStats,
 )
 from app.db.crud.common import (
+    user_content_create,
+    user_content_fetch,
     user_course_create,
+    user_course_fetch,
+    user_course_fetch_by_id,
+    user_course_stats,
     user_course_update,
     user_subject_create,
+    user_subject_fetch,
     user_subject_update,
     user_unit_create,
-    user_unit_update,
-    user_course_fetch,
-    user_subject_fetch,
     user_unit_fetch,
-    user_content_create,
-    user_content_fetch, user_course_stats, user_course_fetch_by_id,
+    user_unit_update,
 )
+from app.db.models.users import User
+from app.db.session.session import get_db
 from app.services.auth.core import get_current_user
 
-common_router = APIRouter(prefix="/common", tags=["Commons"], dependencies=[Depends(get_current_user)])
+from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.encoders import jsonable_encoder
+from fastapi.responses import JSONResponse
+
+
+common_router = APIRouter(
+    prefix="/common", tags=["Commons"], dependencies=[Depends(get_current_user)]
+)
 
 
 @common_router.post("/user-course/create/", response_model=UserCourseFetch)
@@ -68,31 +73,39 @@ def fetch_user_courses(user_id: int, db: Annotated[Session, Depends(get_db)]):
         )
 
 
-@common_router.get(
-    "/user-course/fetch-by-course/{course_id}/"
-)
-def fetch_user_course_by_course_id(course_id:int, db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(get_current_user)]):
+@common_router.get("/user-course/fetch-by-course/{course_id}/")
+def fetch_user_course_by_course_id(
+    course_id: int,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(get_current_user)],
+):
     try:
         return user_course_fetch_by_id(course_id, user, db)
     except Exception as error:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
                 "error_type": error.__class__.__name__,
                 "error_message": str(error),
-            }
+            },
         )
 
-@common_router.get("/user-course/fetch-user-stats/{user_id}/", response_model=UserCourseStats)
+
+@common_router.get(
+    "/user-course/fetch-user-stats/{user_id}/", response_model=UserCourseStats
+)
 def fetch_user_course_stats(user_id: int, db: Annotated[Session, Depends(get_db)]):
     try:
         return user_course_stats(user_id, db)
     except Exception as error:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
                 "error_type": error.__class__.__name__,
-                "error_message": str(error)
-            }
+                "error_message": str(error),
+            },
         )
+
 
 @common_router.patch("/user-course/update/update/{user_course_id}/")
 def update_user_course(

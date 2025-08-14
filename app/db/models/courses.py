@@ -1,6 +1,7 @@
 from sqlmodel import Field, Relationship, SQLModel
 
-from app.db.models.common import UserCourse, UserSubject, UserUnit, UserContent
+from app.db.models.common import UserCourse
+from app.services.enum.courses import ContentTypeEnum
 from app.services.mixins.db_mixins import BaseTimeStampMixin
 
 
@@ -88,8 +89,10 @@ class Contents(SQLModel, BaseTimeStampMixin, table=True):
     id: int | None = Field(default=None, primary_key=True, index=True)
     title: str = Field(max_length=255)
     description: str | None
-    file_url: str
-    unit_content_id: int = Field(foreign_key="unit_contents.id", index=True)
+    file_url: str | None
+    content_type: ContentTypeEnum = Field(default=ContentTypeEnum.TEXT)
+    completion_time: int = Field(default=0, ge=0)
+    unit_content_id: int | None = Field(foreign_key="unit_contents.id", nullable=True)
     order: int | None = Field(ge=0, nullable=True)
 
     unit_content: UnitContents = Relationship(back_populates="contents")

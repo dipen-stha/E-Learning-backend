@@ -1,5 +1,4 @@
 from sqlalchemy.exc import IntegrityError
-
 from sqlmodel import Session
 
 from app.db.session.session import get_db

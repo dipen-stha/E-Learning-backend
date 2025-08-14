@@ -1,8 +1,10 @@
-from fastapi import HTTPException, UploadFile
-from pydantic import ValidationError
 from uuid import uuid4
 
+from pydantic import ValidationError
+
 from config import COURSES_DIR, settings
+
+from fastapi import UploadFile
 
 
 async def image_save(file: UploadFile) -> str:
@@ -17,6 +19,7 @@ async def image_save(file: UploadFile) -> str:
         buffer.write(await file.read())
 
     return file_path
+
 
 def format_file_path(image_url: str):
     if not image_url:
