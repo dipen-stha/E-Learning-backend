@@ -1,8 +1,7 @@
-from datetime import datetime, date
+from datetime import datetime
 
-from sqlmodel import SQLModel, Field, Relationship
+from sqlmodel import Field, Relationship, SQLModel
 
-from app.services.mixins.db_mixins import BaseTimeStampMixin
 
 class Achievements(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True, index=True)
@@ -12,7 +11,9 @@ class Achievements(SQLModel, table=True):
     is_expirable: bool = Field(default=False)
     is_active: bool = Field(default=True)
 
-    achievements_users: list["UserAchievements"] = Relationship(back_populates="achievement_type")
+    achievements_users: list["UserAchievements"] = Relationship(
+        back_populates="achievement_type"
+    )
 
     __tablename__ = "achievements"
 
@@ -30,8 +31,8 @@ class StreakType(SQLModel, table=True):
 
 class UserStreak(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True, index=True)
-    streak_by_id : int = Field(foreign_key="users.id", index=True)
-    streak_type_id : int = Field(foreign_key="streak_types.id", index=True)
+    streak_by_id: int = Field(foreign_key="users.id", index=True)
+    streak_type_id: int = Field(foreign_key="streak_types.id", index=True)
     current_streak: int = Field(default=0, ge=0)
     longest_streak: int = Field(default=0, ge=0)
     last_action: datetime | None = Field(nullable=True)
@@ -52,6 +53,3 @@ class UserAchievements(SQLModel, table=True):
     achievement_type: Achievements = Relationship(back_populates="achievements_users")
 
     __tablename__ = "user_achievements"
-
-
-

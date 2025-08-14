@@ -8,7 +8,12 @@ from app.api.v1.schemas.users import UserFetchSchema
 from app.db.crud.users import get_user_by_id
 from app.db.models.users import User
 from app.db.session.session import get_db
-from app.services.auth.core import authenticate_user, create_tokens, create_access_token, get_current_user
+from app.services.auth.core import (
+    authenticate_user,
+    create_access_token,
+    create_tokens,
+    get_current_user,
+)
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.security import OAuth2PasswordRequestForm
@@ -52,12 +57,17 @@ def refresh(token_data: TokenRefreshData, db: Annotated[Session, Depends(get_db)
         raise HTTPException(status_code=401, detail="Token expired")
     except InvalidTokenError:
         raise HTTPException(status_code=401, detail="Given token is invalid")
-    except Exception as e:
+    except Exception:
         raise HTTPException(status_code=401, detail="User is not authenticated")
 
 
-@auth_router.get("/me/", response_model=UserFetchSchema, dependencies=[Depends(get_current_user)])
-def get_authenticate_user(user: Annotated[User, Depends(get_current_user)], db: Annotated[Session, Depends(get_db)]):
+@auth_router.get(
+    "/me/", response_model=UserFetchSchema, dependencies=[Depends(get_current_user)]
+)
+def get_authenticate_user(
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+):
     try:
         user_instance = get_user_by_id(user.id, db)
         user = UserFetchSchema.model_validate(user_instance)

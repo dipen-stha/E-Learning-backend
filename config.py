@@ -1,7 +1,7 @@
-from pydantic_settings import BaseSettings, SettingsConfigDict
-from typing import List, Any
-
 from pathlib import Path
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
 
 class Settings(BaseSettings):
     DATABASE_ENGINE: str
@@ -11,8 +11,8 @@ class Settings(BaseSettings):
     DATABASE_HOST: str
     SECRET_KEY: str
     ALGORITHM: str
-    ORIGINS: List[str] = []
-    ALLOWED_HOSTS: List[str] = []
+    ORIGINS: list[str] = []
+    ALLOWED_HOSTS: list[str] = []
     API_DOMAIN: str
 
     model_config = SettingsConfigDict(
@@ -24,6 +24,7 @@ class Settings(BaseSettings):
     @property
     def database_url(self) -> str:
         return f"{self.DATABASE_ENGINE}://{self.DATABASE_USER}:{self.DATABASE_PASSWORD}@{self.DATABASE_HOST}/{self.DATABASE_NAME}"
+
 
 settings = Settings()
 

@@ -1,12 +1,16 @@
 from datetime import datetime
 
-from pydantic import BaseModel, Field, field_validator, field_serializer
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.exc import NoResultFound
 
-from app.api.v1.schemas.courses import BaseContent, BaseUnit
-from app.api.v1.schemas.users import UserFetchSchema
-from app.api.v1.schemas.courses import BaseCourse, BaseSubjectFetch
-from app.db.models.courses import Course, Contents, Unit, Subject
+from app.api.v1.schemas.courses import (
+    BaseContent,
+    BaseCourse,
+    BaseSubjectFetch,
+    BaseUnit,
+    SubjectFetch,
+)
+from app.db.models.courses import Contents, Course, Subject, Unit
 from app.db.models.users import User
 from app.services.enum.courses import CompletionStatusEnum
 from app.services.utils.crud_utils import get_model_instance_by_id
@@ -61,6 +65,8 @@ class UserCourseFetch(BaseCommonFetch):
 
     total_subjects: int | None = None
     completed_subjects: int | None = None
+    is_completed: bool = Field(default=False)
+    subjects: list[SubjectFetch] = []
 
     class Config:
         from_attributes = True
@@ -69,6 +75,7 @@ class UserCourseFetch(BaseCommonFetch):
 class UserCourseStats(BaseModel):
     courses_enrolled: int
     completed_courses: int
+
 
 class UserContentCreate(BaseCommonSchema):
     content_id: int

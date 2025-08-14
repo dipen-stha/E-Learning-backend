@@ -2,7 +2,7 @@ from datetime import datetime, timedelta
 from typing import Annotated
 
 import jwt
-from jwt import InvalidTokenError, ExpiredSignatureError
+from jwt import ExpiredSignatureError, InvalidTokenError
 from pydantic import ValidationError
 from sqlmodel import Session
 
@@ -52,11 +52,16 @@ def create_tokens(data: dict) -> (str, str):
 def create_access_token(refresh_token: str, db: Session) -> str:
     try:
         access_expire = datetime.now() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-        decoded_data = jwt.decode(refresh_token, SECRET_KEY, algorithms=[ALGORITHM], options={"verify_signature": True, "verify_exp": True})
+        decoded_data = jwt.decode(
+            refresh_token,
+            SECRET_KEY,
+            algorithms=[ALGORITHM],
+            options={"verify_signature": True, "verify_exp": True},
+        )
         to_encode = {
             "sub": decoded_data["sub"],
             "exp": access_expire.timestamp(),
-            "type": "access"
+            "type": "access",
         }
         access_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
         return access_jwt

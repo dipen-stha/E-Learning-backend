@@ -1,6 +1,5 @@
-from fastapi import UploadFile
-from sqlmodel import select, Session
 from sqlalchemy.orm import joinedload
+from sqlmodel import select, Session
 
 from app.api.v1.schemas.users import UserCreateSchema, UserFetchSchema
 from app.db.models.users import Profile, User
@@ -8,9 +7,13 @@ from app.services.auth.hash import get_password_hash
 from app.services.enum.users import UserRole
 from app.services.utils.files import image_save
 
+from fastapi import UploadFile
+
 
 def get_user_by_id(user_id: int, db: Session) -> UserFetchSchema | None:
-    user = db.exec(select(User).options(joinedload(User.profile)).where(User.id == user_id)).first()
+    user = db.exec(
+        select(User).options(joinedload(User.profile)).where(User.id == user_id)
+    ).first()
     return UserFetchSchema.from_orm(user)
 
 
@@ -19,7 +22,9 @@ def get_user_by_username(username: str, db: Session) -> User | None:
     return user
 
 
-def create_user(user_data: UserCreateSchema, db: Session, image: UploadFile) -> UserFetchSchema:
+def create_user(
+    user_data: UserCreateSchema, db: Session, image: UploadFile
+) -> UserFetchSchema:
     image = str(image_save(image))
     user_instance = User(
         email=user_data.email,
@@ -33,7 +38,7 @@ def create_user(user_data: UserCreateSchema, db: Session, image: UploadFile) -> 
         name=user_data.name,
         gender=user_data.gender,
         dob=user_data.dob,
-        avatar=image
+        avatar=image,
     )
     db.add(profile_instance)
     db.commit()

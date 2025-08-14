@@ -12,3 +12,10 @@ class PaymentMethod(Enum):
     STRIPE = "STRIPE"
     GPAY = "GPAY"
     MOBILE_BANKING = "MOBILE_BANKING"
+
+
+class ContentTypeEnum(Enum):
+    VIDEO = "VIDEO"
+    TEXT = "TEXT"
+    IMAGE = "IMAGE"
+    CODE = "CODE"

@@ -2,9 +2,9 @@ from datetime import date
 
 from sqlmodel import Field, Relationship, SQLModel
 
-from app.db.models.common import UserCourse, UserContent, UserSubject, UserUnit
-from app.db.models.gamification import UserStreak, UserAchievements
+from app.db.models.common import UserCourse
 from app.db.models.courses import Course
+from app.db.models.gamification import UserAchievements, UserStreak
 from app.services.enum.users import UserGender, UserRole
 from app.services.mixins.db_mixins import BaseTimeStampMixin
 
