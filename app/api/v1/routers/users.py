@@ -1,3 +1,5 @@
+import json
+
 from typing import Annotated
 
 from pydantic import ValidationError
@@ -10,20 +12,20 @@ from app.db.session.session import get_db
 from app.services.auth.permissions_mixins import IsAdmin, IsAuthenticated
 from app.services.enum.users import UserRole
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
-
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, Form
 
 user_router = APIRouter(prefix="/users", tags=["Users"])
 
 
 @user_router.post("/create/", response_model=UserFetchSchema)
 def user_create(
-    user: UserCreateSchema,
     db: Annotated[Session, Depends(get_db)],
-    image: UploadFile = File(...),
+    user: str = Form(...),
+    file: UploadFile = File(None),
 ):
     try:
-        return create_user(user, db, image)
+        user_data = UserCreateSchema(**json.loads(user))
+        return create_user(user_data, db, file)
     except IntegrityError:
         raise HTTPException(status_code=500, detail="User already exists")
     except ValidationError as e:

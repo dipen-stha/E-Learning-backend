@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from sqlalchemy.orm import joinedload
 from sqlmodel import select, Session
 
@@ -21,11 +23,18 @@ def get_user_by_username(username: str, db: Session) -> User | None:
     user = db.exec(select(User).where(User.username == username)).first()
     return user
 
+def update_user_login(user: User, db: Session):
+    user.last_login = datetime.now()
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user
 
 def create_user(
-    user_data: UserCreateSchema, db: Session, image: UploadFile
+    user_data: UserCreateSchema, db: Session, image: UploadFile or None = None
 ) -> UserFetchSchema:
-    image = str(image_save(image))
+    if image:
+        image = str(image_save(image))
     user_instance = User(
         email=user_data.email,
         username=user_data.username,

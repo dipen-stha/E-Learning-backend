@@ -1,7 +1,7 @@
 from sqlmodel import Field, Relationship, SQLModel
 
 from app.db.models.common import UserCourse
-from app.services.enum.courses import ContentTypeEnum
+from app.services.enum.courses import ContentTypeEnum, LevelEnum
 from app.services.mixins.db_mixins import BaseTimeStampMixin
 
 
@@ -31,6 +31,9 @@ class Course(SQLModel, BaseTimeStampMixin, table=True):
     instructor_id: int | None = Field(foreign_key="users.id", nullable=True, index=True)
     image_url: str | None = Field(nullable=True)
     description: str | None
+    requirements: str | None
+    objectives: str | None
+    level: LevelEnum | None = Field(nullable=True)
 
     categories: list[Category] = Relationship(
         back_populates="courses", link_model=CategoryCourseLink
