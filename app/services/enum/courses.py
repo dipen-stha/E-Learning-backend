@@ -19,3 +19,9 @@ class ContentTypeEnum(Enum):
     TEXT = "TEXT"
     IMAGE = "IMAGE"
     CODE = "CODE"
+
+
+class LevelEnum(Enum):
+    BEGINNER = "BEGINNER"
+    INTERMEDIATE = "INTERMEDIATE"
+    EXPERT = "EXPERT"

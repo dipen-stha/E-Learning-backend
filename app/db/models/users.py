@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime
 
 from sqlmodel import Field, Relationship, SQLModel
 
@@ -18,7 +18,9 @@ class User(SQLModel, BaseTimeStampMixin, table=True):
         back_populates="user", sa_relationship_kwargs={"uselist": False}
     )
     is_superuser: bool = Field(default=False)
+    is_admin: bool | None = Field(default=False, nullable=True, index=True)
     is_active: bool = Field(default=True, index=True)
+    last_login: datetime | None = Field(default=None, nullable=True, index=True)
 
     # user_courses: list["Course"] = Relationship(back_populates="users", link_model=UserCourse)
     # user_units: list["Unit"] = Relationship(back_populates="users", link_model=UserUnit)
