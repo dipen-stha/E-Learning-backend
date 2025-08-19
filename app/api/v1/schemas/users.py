@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime
 
 from psycopg2.errors import InvalidPassword
 from pydantic import BaseModel, model_validator
@@ -30,6 +30,7 @@ class ProfileSchema(BaseModel):
     dob: date
     gender: UserGender
     avatar: str | None = None
+    role: str | None = None
 
     class Config:
         from_attributes = True
@@ -52,3 +53,19 @@ class UserFetchSchema(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class StudentFetchSchema(BaseModel):
+    id: int
+    profile: ProfileSchema | None
+    email: str
+    is_active: bool
+    joined_date: date
+    last_login: str
+    total_courses: int
+    courses_completed: int
+
+
+class MinimalUserFetch(BaseModel):
+    id: int
+    name: str

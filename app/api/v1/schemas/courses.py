@@ -23,7 +23,7 @@ class CourseUpdate(BaseModel):
 
 
 class CourseCreate(Base):
-    categories_id: list[int]
+    categories_id: list[int] or [] = []
     price: float = Field(ge=0)
     completion_time: int = Field(ge=0)
     instructor_id: int
@@ -43,7 +43,7 @@ class CourseFetch(BaseCourse):
     price: float
     description: str | None = None
     completion_time: int
-    instructor: ProfileSchema | None
+    instructor: ProfileSchema | None = None
     image_url: str | None
 
 

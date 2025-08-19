@@ -1,3 +1,4 @@
+import json
 from typing import Annotated
 
 from pydantic import ValidationError
@@ -36,12 +37,11 @@ from app.db.crud.courses import (
     unit_content_create,
     unit_content_update,
     unit_create,
-    unit_update,
+    unit_update, get_all_categories,
 )
 from app.db.session.session import get_db
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
-
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, Form
 
 course_router = APIRouter(prefix="/courses", tags=["Courses"])
 
@@ -53,6 +53,13 @@ def create_category(data: Base, db: Annotated[Session, Depends(get_db)]):
     except Exception as error:
         raise HTTPException(status_code=500, detail=str(error))
 
+
+@course_router.get("/category/get/", response_model=list[CategoryFetch])
+def get_categories(db: Session = Depends(get_db)):
+    try:
+        return get_all_categories(db)
+    except Exception as error:
+        raise HTTPException(status_code=500, detail=str(error))
 
 @course_router.get("/get/all/", response_model=list[CourseFetch])
 def get_all_courses(db: Annotated[Session, Depends(get_db)]):
@@ -70,12 +77,16 @@ def get_all_courses(db: Annotated[Session, Depends(get_db)]):
 
 @course_router.post("/create/", response_model=CourseFetch)
 def create_course(
-    course: CourseCreate,
     db: Annotated[Session, Depends(get_db)],
-    file: UploadFile = File(...),
+    course: str = Form(...),
+    file: UploadFile = File(None),
 ):
     try:
-        return course_create(course, db, file)
+        data = json.loads(course)
+        data["category_id"] = int(data.get("category_id"))
+        data["instructor_id"] = int(data.get("instructor_id"))
+        course_data = CourseCreate(**data)
+        return course_create(course_data, db, file)
     except Exception as error:
         raise HTTPException(status_code=500, detail=str(error))
 
