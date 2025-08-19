@@ -47,6 +47,11 @@ def course_category_create(title: str, db: Session) -> CategoryFetch:
     return CategoryFetch.model_validate(category_instance)
 
 
+def get_all_categories(db: Session) -> list[CategoryFetch]:
+    categories = db.exec(select(Category)).all()
+    return [CategoryFetch.model_validate(category) for category in categories]
+
+
 def list_all_courses(db: Session) -> list[CourseFetch]:
     student_count_expr = func.count(User.id).label("student_count")
     rating_calculate_expr = func.avg(CourseRating.rating)
@@ -90,28 +95,30 @@ def list_all_courses(db: Session) -> list[CourseFetch]:
 
 def course_create(course: CourseCreate, db: Session, file: UploadFile) -> CourseFetch:
     data = course.model_dump()
-    image_path = image_save(file)
-    data["image_url"] = image_path
+    if file:
+        image_path = image_save(file)
+        data["image_url"] = image_path
     categories_id = data.pop("categories_id")
     statement = select(Category.id).where(Category.id.in_(categories_id))
     categories = db.exec(statement).all()
-    course = Course(**data)
-    db.add(course)
+    course_instance = Course(**data)
+    db.add(course_instance)
     db.flush()
-    course_categories_link = [
-        CategoryCourseLink(course_id=course.id, category_id=category)
-        for category in categories
-    ]
-    db.add_all(course_categories_link)
+    if categories:
+        course_categories_link = [
+            CategoryCourseLink(course_id=course.id, category_id=category)
+            for category in categories
+        ]
+        db.add_all(course_categories_link)
     db.commit()
-    db.refresh(course)
+    db.refresh(course_instance)
     return CourseFetch(
-        id=course.id,
-        title=course.title,
-        price=course.price,
-        completion_time=course.completion_time,
-        instructor=course.instructor,
-        image_url=course.image_url,
+        id=course_instance.id,
+        title=course_instance.title,
+        price=course_instance.price,
+        completion_time=course_instance.completion_time,
+        # instructor=course_instance.instructor,
+        image_url=course_instance.image_url,
     )
 
 
