@@ -1,7 +1,7 @@
 from sqlmodel import Field, Relationship, SQLModel
 
 from app.db.models.common import UserCourse
-from app.services.enum.courses import ContentTypeEnum, LevelEnum
+from app.services.enum.courses import ContentTypeEnum, LevelEnum, StatusEnum
 from app.services.mixins.db_mixins import BaseTimeStampMixin
 
 
@@ -34,6 +34,7 @@ class Course(SQLModel, BaseTimeStampMixin, table=True):
     requirements: str | None
     objectives: str | None
     level: LevelEnum | None = Field(nullable=True)
+    status: StatusEnum | None = Field(nullable=True)
 
     categories: list[Category] = Relationship(
         back_populates="courses", link_model=CategoryCourseLink
@@ -53,6 +54,9 @@ class Subject(SQLModel, BaseTimeStampMixin, table=True):
     completion_time: int = Field(default=0, ge=0)
     course_id: int = Field(foreign_key="courses.id", index=True)
     order: int | None = Field(ge=0, nullable=True)
+    status: StatusEnum | None = Field(nullable=True)
+    description: str | None
+    objectives: str | None
 
     course: Course = Relationship(back_populates="subjects")
     units: list["Unit"] = Relationship(back_populates="subject")
@@ -67,6 +71,9 @@ class Unit(SQLModel, BaseTimeStampMixin, table=True):
     completion_time: int | None = Field(nullable=True, ge=0)
     subject_id: int = Field(foreign_key="subjects.id", index=True)
     order: int | None = Field(ge=0, nullable=True)
+    status: StatusEnum | None = Field(nullable=True)
+    description: str | None
+    objectives: str | None
 
     subject: Subject = Relationship(back_populates="units")
     unit_contents: list["UnitContents"] = Relationship(back_populates="unit")

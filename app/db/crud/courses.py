@@ -1,5 +1,5 @@
 from sqlalchemy.exc import NoResultFound
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import selectinload, joinedload
 from sqlmodel import func, select, Session
 
 from app.api.v1.schemas.courses import (
@@ -21,7 +21,7 @@ from app.api.v1.schemas.courses import (
     UnitUpdate,
 )
 from app.api.v1.schemas.users import ProfileSchema
-from app.db.models.common import UserCourse
+from app.db.models.common import UserCourse, UserSubject
 from app.db.models.courses import (
     Category,
     CategoryCourseLink,
@@ -33,6 +33,7 @@ from app.db.models.courses import (
     UnitContents,
 )
 from app.db.models.users import User
+from app.services.enum.courses import StatusEnum
 from app.services.utils.crud_utils import update_model_instance
 from app.services.utils.files import format_file_path, image_save
 
@@ -52,20 +53,30 @@ def get_all_categories(db: Session) -> list[CategoryFetch]:
     return [CategoryFetch.model_validate(category) for category in categories]
 
 
-def list_all_courses(db: Session) -> list[CourseFetch]:
+def list_minimal_courses(db: Session) -> list[BaseCourse]:
+    courses = db.exec(select(Course.id, Course.title).where(Course.status == StatusEnum.PUBLISHED)).all()
+    return [BaseCourse(
+        id = course.id,
+        title = course.title,
+    ) for course in courses]
+
+def list_all_courses(db: Session) -> list[CourseDetailFetch]:
     student_count_expr = func.count(User.id).label("student_count")
     rating_calculate_expr = func.avg(CourseRating.rating)
+    total_revenue = (Course.price * func.count(User.id)).label("total_revenue")
     courses = db.exec(
-        select(Course, student_count_expr, rating_calculate_expr)
+        select(Course, student_count_expr, rating_calculate_expr, total_revenue)
         .select_from(Course)
         .join(UserCourse, UserCourse.course_id == Course.id, isouter=True)
         .join(User, User.id == UserCourse.user_id, isouter=True)
         .join(CourseRating, CourseRating.course_id == Course.id, isouter=True)
+        .join(Subject, Subject.course_id == Course.id, isouter=True)
         .options(
             selectinload(Course.categories),
             selectinload(Course.instructor).selectinload(User.profile),
+            selectinload(Course.subjects)
         )
-        .group_by(Course)
+        .group_by(Course.id, Course.price)
         .order_by(student_count_expr.desc())
     ).all()
 
@@ -77,6 +88,7 @@ def list_all_courses(db: Session) -> list[CourseFetch]:
             completion_time=course.completion_time,
             student_count=student_count,
             course_rating=course_rating,
+            total_revenue=total_revenue,
             instructor=(
                 ProfileSchema(
                     name=course.instructor.profile.name,
@@ -87,17 +99,19 @@ def list_all_courses(db: Session) -> list[CourseFetch]:
             ),
             categories=[category.title for category in course.categories],
             image_url=format_file_path(course.image_url),
+            subjects=course.subjects,
+            status=course.status
         )
-        for course, student_count, course_rating in courses
+        for course, student_count, course_rating, total_revenue in courses
     ]
     return courses_data
 
 
-def course_create(course: CourseCreate, db: Session, file: UploadFile) -> CourseFetch:
+async def course_create(course: CourseCreate, db: Session, file: UploadFile) -> CourseFetch:
     data = course.model_dump()
     if file:
-        image_path = image_save(file)
-        data["image_url"] = image_path
+        image_path = await image_save(file)
+        data["image_url"] = str(image_path)
     categories_id = data.pop("categories_id")
     statement = select(Category.id).where(Category.id.in_(categories_id))
     categories = db.exec(statement).all()
@@ -106,7 +120,7 @@ def course_create(course: CourseCreate, db: Session, file: UploadFile) -> Course
     db.flush()
     if categories:
         course_categories_link = [
-            CategoryCourseLink(course_id=course.id, category_id=category)
+            CategoryCourseLink(course_id=course_instance.id, category_id=category)
             for category in categories
         ]
         db.add_all(course_categories_link)
@@ -175,6 +189,7 @@ def course_fetch_by_id(course_id: int, db: Session):
         student_count=student_count,
         categories=[category.title for category in course.categories],
         image_url=format_file_path(course.image_url),
+        status=course.status,
         subjects=[
             SubjectFetch(
                 id=subject.id,
@@ -201,13 +216,25 @@ def subject_create(subject: SubjectCreate, db: Session) -> SubjectFetch:
     return SubjectFetch.from_orm(subject_instance)
 
 
-def fetch_by_course(course_id: int, db: Session) -> list[SubjectFetch]:
-    subjects = db.exec(
+def fetch_courses(db: Session, course_id: int | None = None) -> list[SubjectFetch]:
+
+    statement = (
         select(Subject)
-        .options(selectinload(Subject.course))
-        .where(Subject.course_id == course_id)
+        .join(UserSubject, isouter=True)
+        .options(joinedload(Subject.course).joinedload(Course.instructor).joinedload(User.profile))
     )
-    subjects_data = [SubjectFetch.from_orm(subject) for subject in subjects]
+    if course_id:
+        statement = statement.where(Subject.course_id == course_id)
+    subjects = db.exec(statement).all()
+    subjects_data = [SubjectFetch(
+        id=subject.id,
+        title=subject.title,
+        description=subject.description,
+        course=subject.course,
+        instructor=subject.course.instructor.profile,
+        status=subject.status,
+        order=subject.order,
+    ) for subject in subjects]
     return subjects_data
 
 
