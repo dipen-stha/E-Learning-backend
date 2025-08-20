@@ -1,8 +1,11 @@
 import json
 from typing import Annotated
 
+from fastapi.encoders import jsonable_encoder
 from pydantic import ValidationError
 from sqlmodel import Session
+from starlette import status
+from starlette.responses import JSONResponse
 
 from app.api.v1.schemas.courses import (
     Base,
@@ -20,7 +23,7 @@ from app.api.v1.schemas.courses import (
     UnitContentUpdate,
     UnitCreate,
     UnitFetch,
-    UnitUpdate,
+    UnitUpdate, CourseDetailFetch,
 )
 from app.db.crud.courses import (
     content_create,
@@ -30,14 +33,14 @@ from app.db.crud.courses import (
     course_fetch_by_id,
     course_update,
     fetch_by_content_unit,
-    fetch_by_course,
+    fetch_courses,
     fetch_units_by_subject,
     list_all_courses,
     subject_create,
     unit_content_create,
     unit_content_update,
     unit_create,
-    unit_update, get_all_categories,
+    unit_update, get_all_categories, list_minimal_courses,
 )
 from app.db.session.session import get_db
 
@@ -61,7 +64,7 @@ def get_categories(db: Session = Depends(get_db)):
     except Exception as error:
         raise HTTPException(status_code=500, detail=str(error))
 
-@course_router.get("/get/all/", response_model=list[CourseFetch])
+@course_router.get("/get/all/", response_model=list[CourseDetailFetch])
 def get_all_courses(db: Annotated[Session, Depends(get_db)]):
     try:
         return list_all_courses(db)
@@ -75,18 +78,25 @@ def get_all_courses(db: Annotated[Session, Depends(get_db)]):
         )
 
 
+@course_router.get("/get/minimal/", response_model=list[BaseCourse])
+def get_minimal_courses(db: Annotated[Session, Depends(get_db)]):
+    try:
+        return list_minimal_courses(db)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail={
+            "error_type": e.__class__.__name__,
+            "error_message": str(e),
+        })
 @course_router.post("/create/", response_model=CourseFetch)
-def create_course(
+async def create_course(
     db: Annotated[Session, Depends(get_db)],
     course: str = Form(...),
     file: UploadFile = File(None),
 ):
     try:
         data = json.loads(course)
-        data["category_id"] = int(data.get("category_id"))
-        data["instructor_id"] = int(data.get("instructor_id"))
         course_data = CourseCreate(**data)
-        return course_create(course_data, db, file)
+        return await course_create(course_data, db, file)
     except Exception as error:
         raise HTTPException(status_code=500, detail=str(error))
 
@@ -133,10 +143,26 @@ def create_subject(subject: SubjectCreate, db: Annotated[Session, Depends(get_db
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@course_router.get("/subject/get/all/", response_model=list[SubjectFetch])
+def list_all_subjects(db: Annotated[Session, Depends(get_db)]):
+    try:
+        return fetch_courses(db)
+    except ValidationError as ve:
+        return JSONResponse(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            content=jsonable_encoder({"errors": ve.errors()}),
+        )
+    except Exception as error:
+        raise HTTPException(status_code=500, detail={
+            "error_type": error.__class__.__name__,
+            "error_message": str(error),
+        })
+
+
 @course_router.get("/subject/by_course/{course_id}/", response_model=list[SubjectFetch])
 def list_subjects_by_course(course_id: int, db: Annotated[Session, Depends(get_db)]):
     try:
-        return fetch_by_course(course_id, db)
+        return fetch_courses(db, course_id)
     except Exception as error:
         raise HTTPException(status_code=500, detail=str(error))
 

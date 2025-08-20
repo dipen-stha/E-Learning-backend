@@ -2,7 +2,7 @@ from pydantic import BaseModel, Field
 
 from app.api.v1.schemas.users import ProfileSchema
 from app.db.models.courses import Contents, Subject, Unit, UnitContents
-from app.services.enum.courses import ContentTypeEnum
+from app.services.enum.courses import ContentTypeEnum, StatusEnum
 
 
 class Base(BaseModel):
@@ -52,12 +52,17 @@ class CourseDetailFetch(CourseFetch):
     course_rating: float | None
     categories: list[str]
     subjects: list["SubjectFetch"] = []
+    total_revenue: float | None = None
+    status: StatusEnum
 
 
 class SubjectCreate(Base):
     completion_time: int
     course_id: int
     order: int
+    status: StatusEnum
+    description: str | None = None
+    objectives: str | None = None
 
 
 class BaseSubjectFetch(Base):
@@ -80,11 +85,16 @@ class SubjectDetailsFetch(BaseModel):
 class SubjectFetch(BaseSubjectFetch):
     completion_time: int = Field(default=0, ge=0)
     course: BaseCourse | None = None
+    instructor: ProfileSchema | None = None
     order: int | None
     units: list[str] | list["UserUnitDetail"] = []
     total_units: int | None = None
     completed_units: int | None = None
     completion_percent: float | None = None
+    description: str | None = None
+    status: StatusEnum
+    student_count: int | None = None
+
 
     @staticmethod
     def from_orm(subject: Subject):

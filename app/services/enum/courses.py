@@ -25,3 +25,9 @@ class LevelEnum(Enum):
     BEGINNER = "BEGINNER"
     INTERMEDIATE = "INTERMEDIATE"
     EXPERT = "EXPERT"
+
+
+class StatusEnum(Enum):
+    PUBLISHED = "PUBLISHED"
+    ARCHIVED = "ARCHIVED"
+    DRAFT = "DRAFT"
