@@ -69,3 +69,14 @@ class StudentFetchSchema(BaseModel):
 class MinimalUserFetch(BaseModel):
     id: int
     name: str
+
+
+class UserStats(BaseModel):
+    total_count: int
+    active_count: int
+    suspended_count: int
+    monthly_creation: int
+    percent_total_count: float
+    percent_active_count: float
+    percent_monthly_creation: float
+    percent_suspended_count: float

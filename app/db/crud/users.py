@@ -1,9 +1,10 @@
 from datetime import datetime, timedelta
 
+from sqlalchemy import extract
 from sqlalchemy.orm import joinedload, selectinload
 from sqlmodel import select, Session, func
 
-from app.api.v1.schemas.users import UserCreateSchema, UserFetchSchema, StudentFetchSchema, MinimalUserFetch
+from app.api.v1.schemas.users import UserCreateSchema, UserFetchSchema, StudentFetchSchema, MinimalUserFetch, UserStats
 from app.db.models.common import UserCourse
 from app.db.models.users import Profile, User
 from app.services.auth.hash import get_password_hash
@@ -112,3 +113,28 @@ def get_students_list(db: Session) -> list[StudentFetchSchema]:
 def get_minimal_user_list(db: Session) -> list[MinimalUserFetch]:
     users = db.exec(select(User.id, Profile.name).where(User.id == Profile.user_id, Profile.role == UserRole.TUTOR).join(Profile)).all()
     return [MinimalUserFetch(id=user.id, name=user.name) for user in users]
+
+def get_user_stats(role: UserRole, db: Session):
+    current_month = datetime.now().month
+    statement = (
+        select(
+            func.count(User.id).label("total_count"),
+            func.count(User.id).filter(User.is_active == True).label("active_count"),
+            func.count(User.id).filter(User.is_active == False).label("suspended_count"),
+            func.count(User.id).filter(extract("month", User.created_at) == current_month).label("monthly_creation"),
+            func.count(User.id).filter(extract("month", User.created_at) != current_month).label("last_month_count")
+        )
+        .join(Profile, Profile.user_id == User.id)
+        .where(Profile.role == role)
+    )
+    total_count, active_count, suspended_count, monthly_creation, last_month_count = db.exec(statement).first()
+    return UserStats(
+        total_count=total_count,
+        active_count=active_count,
+        suspended_count=suspended_count,
+        monthly_creation=monthly_creation,
+        percent_total_count=(total_count/(last_month_count if last_month_count else total_count)) * 100,
+        percent_active_count=(active_count / total_count) * 100,
+        percent_monthly_creation=(monthly_creation/(last_month_count if last_month_count else monthly_creation)) * 100,
+        percent_suspended_count=(suspended_count / total_count) * 100
+    )

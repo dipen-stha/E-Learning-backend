@@ -33,7 +33,7 @@ from app.db.crud.courses import (
     course_fetch_by_id,
     course_update,
     fetch_by_content_unit,
-    fetch_courses,
+    fetch_subjects_by_courses,
     fetch_units_by_subject,
     list_all_courses,
     subject_create,
@@ -146,7 +146,7 @@ def create_subject(subject: SubjectCreate, db: Annotated[Session, Depends(get_db
 @course_router.get("/subject/get/all/", response_model=list[SubjectFetch])
 def list_all_subjects(db: Annotated[Session, Depends(get_db)]):
     try:
-        return fetch_courses(db)
+        return fetch_subjects_by_courses(db)
     except ValidationError as ve:
         return JSONResponse(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -162,7 +162,7 @@ def list_all_subjects(db: Annotated[Session, Depends(get_db)]):
 @course_router.get("/subject/by_course/{course_id}/", response_model=list[SubjectFetch])
 def list_subjects_by_course(course_id: int, db: Annotated[Session, Depends(get_db)]):
     try:
-        return fetch_courses(db, course_id)
+        return fetch_subjects_by_courses(db, course_id)
     except Exception as error:
         raise HTTPException(status_code=500, detail=str(error))
 
