@@ -216,12 +216,13 @@ def subject_create(subject: SubjectCreate, db: Session) -> SubjectFetch:
     return SubjectFetch.from_orm(subject_instance)
 
 
-def fetch_courses(db: Session, course_id: int | None = None) -> list[SubjectFetch]:
+def fetch_subjects_by_courses(db: Session, course_id: int | None = None) -> list[SubjectFetch]:
 
     statement = (
         select(Subject)
         .join(UserSubject, isouter=True)
         .options(joinedload(Subject.course).joinedload(Course.instructor).joinedload(User.profile))
+        .order_by(Subject.order)
     )
     if course_id:
         statement = statement.where(Subject.course_id == course_id)

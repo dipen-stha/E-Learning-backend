@@ -7,7 +7,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session
 
 from app.api.v1.schemas.users import UserCreateSchema, UserFetchSchema, StudentFetchSchema, MinimalUserFetch
-from app.db.crud.users import create_user, get_user_list_by_role, get_students_list, get_minimal_user_list
+from app.db.crud.users import create_user, get_user_list_by_role, get_students_list, get_minimal_user_list, \
+    get_user_stats
 from app.db.session.session import get_db
 from app.services.auth.permissions_mixins import IsAdmin, IsAuthenticated
 from app.services.enum.users import UserRole
@@ -66,5 +67,15 @@ def fetch_teachers(db: Annotated[Session, Depends(get_db)]):
 def fetch_minimal_tutors_list(db: Annotated[Session, Depends(get_db)]):
     try:
         return get_minimal_user_list(db)
+    except Exception as error:
+        raise HTTPException(status_code=500, detail=str(error))
+
+
+@user_router.get(
+    "/students/get/user-stats/"
+)
+def user_stats(db: Annotated[Session, Depends(get_db)]):
+    try:
+        return get_user_stats(UserRole.STUDENT, db)
     except Exception as error:
         raise HTTPException(status_code=500, detail=str(error))
