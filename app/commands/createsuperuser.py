@@ -1,11 +1,11 @@
-from app.db.models.users import User
+from app.db.models.users import User, Profile
 from app.db.session.session import get_db
 from app.services.auth.hash import get_password_hash
 from app.services.utils.validator import validate_email
 
 
 def create_superuser():
-    input("Enter name: ")
+    name=input("Enter name: ")
     username = input("Enter username: ")
     email = input("Enter email: ")
     password = input("Enter password: ")
@@ -27,12 +27,12 @@ def create_superuser():
     )
     session = next(get_db())
     session.add(user)
-    # session.flush()
-    # user_profile = Profile(
-    #     user_id=user.id,
-    #     name=name,
-    # )
-    # session.add(user_profile)
+    session.flush()
+    user_profile = Profile(
+        user_id=user.id,
+        name=name,
+    )
+    session.add(user_profile)
     session.commit()
 
     print(f"Superuser created with username: {user.username}")
