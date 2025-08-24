@@ -26,7 +26,11 @@ class CourseCreate(Base):
     categories_id: list[int] or [] = []
     price: float = Field(ge=0)
     completion_time: int = Field(ge=0)
+    description: str | None
+    requirements: str | None
+    objectives: str | None
     instructor_id: int
+    status: StatusEnum
 
 
 class BaseCourse(Base):

@@ -102,6 +102,11 @@ async def create_course(
         data = json.loads(course)
         course_data = CourseCreate(**data)
         return await course_create(course_data, db, file)
+    except ValidationError as error:
+        return JSONResponse(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            content=jsonable_encoder({"errors": error.errors()}),
+        )
     except Exception as error:
         raise HTTPException(status_code=500, detail=str(error))
 
