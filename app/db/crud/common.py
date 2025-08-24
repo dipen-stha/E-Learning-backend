@@ -142,9 +142,9 @@ def get_subject_detail_with_unit_counts(course_id: int, user_id: int, db: Sessio
 def user_course_fetch_by_id(
     course_id: int, user: User, db: Session
 ) -> UserCourseFetch | None:
-    user_course = db.get(User, course_id)
+    user_course = db.get(Course, course_id)
     if not user_course:
-        raise NoResultFound(f"User with id {course_id} not found")
+        raise NoResultFound(f"Course with id {course_id} not found")
     user_id = user.id
     subject_details = {subject.id: subject for subject in get_subject_detail_with_unit_counts(course_id, user_id, db)}
     subject_subquery = (

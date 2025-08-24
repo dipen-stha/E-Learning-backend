@@ -127,7 +127,7 @@ class UserSubjectCreate(BaseCommonSchema):
 
 class UserSubjectFetch(BaseCommonFetch):
     subject: BaseSubjectFetch
-    completion_percent: float | None
+    completion_percent: float | None = None
 
     class Config:
         from_attributes = True
