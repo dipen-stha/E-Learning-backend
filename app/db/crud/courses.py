@@ -18,7 +18,7 @@ from app.api.v1.schemas.courses import (
     UnitContentUpdate,
     UnitCreate,
     UnitFetch,
-    UnitUpdate,
+    UnitUpdate, BaseSubjectFetch,
 )
 from app.api.v1.schemas.users import ProfileSchema
 from app.db.models.common import UserCourse, UserSubject
@@ -79,7 +79,6 @@ def list_all_courses(db: Session) -> list[CourseDetailFetch]:
         .group_by(Course.id, Course.price)
         .order_by(student_count_expr.desc())
     ).all()
-
     courses_data = [
         CourseDetailFetch(
             id=course.id,
@@ -99,7 +98,7 @@ def list_all_courses(db: Session) -> list[CourseDetailFetch]:
             ),
             categories=[category.title for category in course.categories],
             image_url=format_file_path(course.image_url),
-            subjects=course.subjects,
+            subjects=[subject.title for subject in course.subjects],
             status=course.status
         )
         for course, student_count, course_rating, total_revenue in courses
@@ -197,6 +196,7 @@ def course_fetch_by_id(course_id: int, db: Session):
                 completion_time=subject.completion_time,
                 order=subject.order,
                 units=[unit.title for unit in subject.units],
+                status=subject.status
             )
             for subject in course.subjects
         ],
@@ -213,7 +213,7 @@ def subject_create(subject: SubjectCreate, db: Session) -> SubjectFetch:
     db.add(subject_instance)
     db.commit()
     db.refresh(subject_instance)
-    return SubjectFetch.from_orm(subject_instance)
+    return SubjectFetch.model_validate(subject_instance)
 
 
 def fetch_subjects_by_courses(db: Session, course_id: int | None = None) -> list[SubjectFetch]:
@@ -238,6 +238,18 @@ def fetch_subjects_by_courses(db: Session, course_id: int | None = None) -> list
     ) for subject in subjects]
     return subjects_data
 
+def fetch_subjects_minimal(db: Session, course_id: int | None = None) -> list[BaseSubjectFetch]:
+    statement = (
+            select(Subject.id, Subject.title)
+        )
+    if course_id:
+        statement = statement.where(Subject.course_id == course_id)
+    subjects = db.exec(statement).all()
+    subjects_data = [BaseSubjectFetch(id=subject.id, title=subject.title) for subject in subjects]
+    return subjects_data
+
+
+
 
 def unit_create(unit: UnitCreate, db: Session) -> UnitFetch:
     data = unit.model_dump()
@@ -249,7 +261,15 @@ def unit_create(unit: UnitCreate, db: Session) -> UnitFetch:
     db.add(unit_instance)
     db.commit()
     db.refresh(unit_instance)
-    return UnitFetch.from_orm(unit_instance)
+    return UnitFetch(
+        id=unit_instance.id,
+        title=unit_instance.title,
+        description=unit_instance.description,
+        objectives=unit_instance.objectives,
+        status=unit_instance.status,
+        completion_time=unit_instance.completion_time,
+        order=unit_instance.order,
+    )
 
 
 def unit_update(unit_id: int, unit: UnitUpdate, db: Session) -> UnitFetch:
@@ -266,6 +286,25 @@ def unit_update(unit_id: int, unit: UnitUpdate, db: Session) -> UnitFetch:
     db.commit()
     db.refresh(updated_unit_instance)
     return UnitFetch.from_orm(updated_unit_instance)
+
+def fetch_all_units(db: Session) -> list[UnitFetch]:
+    statement = (
+        select(Unit, Subject.title, Course.title)
+        .join(Subject, Subject.id == Unit.subject_id)
+        .join(Course, Subject.course_id == Course.id)
+    )
+    units = db.exec(statement).all()
+    return [UnitFetch(
+        id=unit.id,
+        title=unit.title,
+        subject=subject,
+        order=unit.order,
+        description=unit.description,
+        objectives=unit.objectives,
+        course=course,
+        completion_time=unit.completion_time,
+        status=unit.status
+    ) for unit, subject, course in units]
 
 
 def fetch_units_by_subject(subject_id: int, db: Session) -> list[UnitFetch]:

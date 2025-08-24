@@ -51,9 +51,10 @@ class CourseDetailFetch(CourseFetch):
     student_count: int | None
     course_rating: float | None
     categories: list[str]
-    subjects: list["SubjectFetch"] = []
+    subjects: list["SubjectFetch"] | list[str] = []
     total_revenue: float | None = None
     status: StatusEnum
+    is_enrolled: bool = Field(default=False)
 
 
 class SubjectCreate(Base):
@@ -96,16 +97,6 @@ class SubjectFetch(BaseSubjectFetch):
     student_count: int | None = None
 
 
-    @staticmethod
-    def from_orm(subject: Subject):
-        return SubjectFetch(
-            id=subject.id,
-            title=subject.title,
-            completion_time=subject.completion_time,
-            course=BaseCourse.model_validate(subject.course),
-            order=subject.order,
-        )
-
 
 class UnitFetchBase(BaseModel):
     id: int
@@ -115,6 +106,11 @@ class UnitFetchBase(BaseModel):
 
 class UnitCreate(Base):
     subject_id: int
+    order: int
+    completion_time: int
+    description: str | None = None
+    status: StatusEnum
+    objectives: str | None = None
     order: int
 
 
@@ -127,17 +123,13 @@ class BaseUnit(Base):
 
 class UnitFetch(BaseUnit):
     id: int
-    subject: BaseSubjectFetch | None
+    subject: BaseSubjectFetch | str | None = None
     order: int | None
-
-    @staticmethod
-    def from_orm(unit: Unit):
-        return UnitFetch(
-            id=unit.id,
-            title=unit.title,
-            subject=BaseSubjectFetch.model_validate(unit.subject),
-            order=unit.order,
-        )
+    completion_time: int
+    course: str | None = None
+    status: StatusEnum
+    description: str | None
+    objectives: str | None
 
 
 class UserUnitDetail(Base):
