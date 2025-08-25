@@ -31,3 +31,10 @@ class StatusEnum(Enum):
     PUBLISHED = "PUBLISHED"
     ARCHIVED = "ARCHIVED"
     DRAFT = "DRAFT"
+
+
+class PaymentStatus(Enum):
+    PENDING = "PENDING"
+    PAID = "PAID"
+    REJECTED = "REJECTED"
+    REFUNDED = "REFUNDED"

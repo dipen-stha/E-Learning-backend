@@ -4,4 +4,5 @@ from app.db.session.session import engine
 
 
 def init_db():
-    SQLModel.metadata.create_all(engine)
+    # SQLModel.metadata.create_all(engine)
+    pass

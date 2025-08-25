@@ -14,6 +14,9 @@ class Settings(BaseSettings):
     ORIGINS: list[str] = []
     ALLOWED_HOSTS: list[str] = []
     API_DOMAIN: str
+    STRIPE_PUBLISHABLE_KEY: str
+    STRIPE_SECRET_KEY: str
+    STRIPE_WEBHOOK_SECRET: str
 
     model_config = SettingsConfigDict(
         env_file=".env",

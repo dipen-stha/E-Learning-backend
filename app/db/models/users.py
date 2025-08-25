@@ -32,6 +32,7 @@ class User(SQLModel, BaseTimeStampMixin, table=True):
     user_ratings: list["CourseRating"] = Relationship(back_populates="rated_by")
     achieved: list[UserAchievements] = Relationship(back_populates="achieved_by")
     users_streaks: list[UserStreak] = Relationship(back_populates="streak_by")
+    course_enrollments: list["CourseEnrollment"] = Relationship(back_populates="user")
 
     __tablename__ = "users"
 

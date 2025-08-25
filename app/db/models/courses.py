@@ -3,6 +3,7 @@ from sqlmodel import Field, Relationship, SQLModel
 from app.db.models.common import UserCourse
 from app.services.enum.courses import ContentTypeEnum, LevelEnum, StatusEnum
 from app.services.mixins.db_mixins import BaseTimeStampMixin
+from app.db.models.enrollment import CourseEnrollment
 
 
 class CategoryCourseLink(SQLModel, table=True):
@@ -44,6 +45,7 @@ class Course(SQLModel, BaseTimeStampMixin, table=True):
     # users: list["User"] = Relationship(back_populates="user_courses", link_model=UserCourse)
     user_course_links: list["UserCourse"] = Relationship(back_populates="course")
     ratings: list["CourseRating"] = Relationship(back_populates="rated_course")
+    user_enrollments: list["CourseEnrollment"] = Relationship(back_populates="course")
 
     __tablename__ = "courses"
 
