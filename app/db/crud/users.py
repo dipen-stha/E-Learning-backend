@@ -4,13 +4,14 @@ from sqlalchemy import extract
 from sqlalchemy.orm import joinedload, selectinload
 from sqlmodel import select, Session, func
 
-from app.api.v1.schemas.users import UserCreateSchema, UserFetchSchema, StudentFetchSchema, MinimalUserFetch, UserStats
+from app.api.v1.schemas.users import UserCreateSchema, UserFetchSchema, StudentFetchSchema, MinimalUserFetch, UserStats, \
+    ProfileSchema
 from app.db.models.common import UserCourse
 from app.db.models.users import Profile, User
 from app.services.auth.hash import get_password_hash
 from app.services.enum.courses import CompletionStatusEnum
 from app.services.enum.users import UserRole
-from app.services.utils.files import image_save
+from app.services.utils.files import image_save, format_file_path
 
 from fastapi import UploadFile
 import humanize
@@ -34,11 +35,11 @@ def update_user_login(user: User, db: Session):
     db.refresh(user)
     return user
 
-def create_user(
+async def create_user(
     user_data: UserCreateSchema, db: Session, image: UploadFile or None = None
 ) -> UserFetchSchema:
     if image:
-        image = str(image_save(image))
+        image = str(await image_save(image))
     user_instance = User(
         email=user_data.email,
         username=user_data.username,
@@ -100,7 +101,13 @@ def get_students_list(db: Session) -> list[StudentFetchSchema]:
     return [
         StudentFetchSchema(
             id=user.id,
-            profile=profile,
+            profile=ProfileSchema(
+                name=profile.name,
+                gender=profile.gender,
+                dob=profile.dob,
+                avatar=format_file_path(profile.avatar),
+                role=profile.role
+            ),
             email=user.email,
             is_active=user.is_active,
             last_login=f"{humanize.naturaldelta(datetime.now() - user.last_login) + " ago" if user.last_login else 'Not Logged In'}",

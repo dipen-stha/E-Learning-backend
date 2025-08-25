@@ -19,14 +19,14 @@ user_router = APIRouter(prefix="/users", tags=["Users"])
 
 
 @user_router.post("/create/", response_model=UserFetchSchema)
-def user_create(
+async def user_create(
     db: Annotated[Session, Depends(get_db)],
     user: str = Form(...),
     file: UploadFile = File(None),
 ):
     try:
         user_data = UserCreateSchema(**json.loads(user))
-        return create_user(user_data, db, file)
+        return await create_user(user_data, db, file)
     except IntegrityError:
         raise HTTPException(status_code=500, detail="User already exists")
     except ValidationError as e:
