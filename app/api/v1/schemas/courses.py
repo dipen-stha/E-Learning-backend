@@ -1,7 +1,7 @@
 from pydantic import BaseModel, Field
 
 from app.api.v1.schemas.users import ProfileSchema
-from app.db.models.courses import Contents, Subject, Unit, UnitContents
+from app.db.models.courses import Contents, Subject, Unit
 from app.services.enum.courses import ContentTypeEnum, StatusEnum
 
 
@@ -44,10 +44,10 @@ class BaseCourse(Base):
 class CourseFetch(BaseCourse):
     id: int
     title: str
-    price: float
+    price: float | None = None
     description: str | None = None
     completion_time: int
-    instructor: ProfileSchema | None = None
+    instructor: ProfileSchema | str | None = None
     image_url: str | None
 
 
@@ -88,16 +88,16 @@ class SubjectDetailsFetch(BaseModel):
 
 
 class SubjectFetch(BaseSubjectFetch):
-    completion_time: int = Field(default=0, ge=0)
+    completion_time: int | None = None
     course: BaseCourse | None = None
     instructor: ProfileSchema | None = None
-    order: int | None
+    order: int | None = None
     units: list[str] | list["UserUnitDetail"] = []
     total_units: int | None = None
     completed_units: int | None = None
     completion_percent: float | None = None
     description: str | None = None
-    status: StatusEnum
+    status: StatusEnum | None = None
     student_count: int | None = None
 
 
@@ -147,52 +147,21 @@ class UnitUpdate(BaseModel):
     order: int | None = None
 
 
-class BaseUnitContent(Base):
-    id: int
-    title: str
-
-    class Config:
-        from_attributes = True
-
-
-class UnitContentCreate(Base):
-    unit_id: int
-    completion_time: int = Field(default=None, ge=0)
-    order: int
-
-
-class UnitContentFetch(BaseUnitContent):
-    completion_time: int
-    course: BaseCourse
-    order: int | None
-
-    @classmethod
-    def from_orm(unit_content: UnitContents):
-        return UnitContentFetch(
-            id=unit_content.id,
-            title=unit_content.title,
-            completion_time=unit_content.completion_time,
-            course=BaseCourse.model_validate(unit_content.course),
-            order=unit_content.order,
-        )
-
-
-class UnitContentUpdate(BaseModel):
-    title: str | None = None
-    completion_time: int | None = Field(default=None, ge=0)
-    unit_id: int | None = None
-    order: int | None = None
-
-
 class BaseContent(Base):
     id: int
 
 
+class VideoTimeStamp(BaseModel):
+    title: str
+    time_stamp: str
+
 class ContentCreate(Base):
-    completion_time: int = Field(default=None, ge=0)
+    completion_time: int = Field(ge=0)
     order: int
     description: str | None
     content_type: ContentTypeEnum
+    status: StatusEnum
+    video_time_stamps: list[VideoTimeStamp] = []
 
 
 class ContentFetch(BaseContent):

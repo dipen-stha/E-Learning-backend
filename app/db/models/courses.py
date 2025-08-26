@@ -78,7 +78,7 @@ class Unit(SQLModel, BaseTimeStampMixin, table=True):
     objectives: str | None
 
     subject: Subject = Relationship(back_populates="units")
-    unit_contents: list["UnitContents"] = Relationship(back_populates="unit")
+    contents: list["Contents"] = Relationship(back_populates="unit")
     # users: list["User"] = Relationship(back_populates="user_units", link_model=UserUnit)
 
     __tablename__ = "units"
@@ -91,8 +91,8 @@ class UnitContents(SQLModel, BaseTimeStampMixin, table=True):
     completion_time: int = Field(default=0, ge=0)
     order: int | None = Field(ge=0, nullable=True)
 
-    unit: Unit = Relationship(back_populates="unit_contents")
-    contents: list["Contents"] = Relationship(back_populates="unit_content")
+    # unit: Unit = Relationship(back_populates="unit_contents")
+    # contents: list["Contents"] = Relationship(back_populates="unit_content")
 
     __tablename__ = "unit_contents"
 
@@ -104,13 +104,26 @@ class Contents(SQLModel, BaseTimeStampMixin, table=True):
     file_url: str | None
     content_type: ContentTypeEnum = Field(default=ContentTypeEnum.TEXT)
     completion_time: int = Field(default=0, ge=0)
-    unit_content_id: int | None = Field(foreign_key="unit_contents.id", nullable=True)
+    content_id: int | None = Field(foreign_key="units.id", nullable=True)
     order: int | None = Field(ge=0, nullable=True)
-
-    unit_content: UnitContents = Relationship(back_populates="contents")
+    status: StatusEnum | None = Field(nullable=True, default=StatusEnum.DRAFT)
+    unit: Unit = Relationship(back_populates="contents")
+    # unit_content: UnitContents = Relationship(back_populates="contents")
+    video_time_stamps: list["ContentVideoTimeStamp"] = Relationship(back_populates="content")
     # users: list["User"] = Relationship(back_populates="user_contents", link_model=UserContent)
 
     __tablename__ = "contents"
+
+
+class ContentVideoTimeStamp(SQLModel, BaseTimeStampMixin, table=True):
+    id: int | None = Field(default=None, primary_key=True, index=True)
+    title: str = Field(max_length=255)
+    content_id: int = Field(foreign_key="contents.id", nullable=True)
+    time_stamp: int = Field(nullable=True)
+
+    content: Contents = Relationship(back_populates="video_time_stamps")
+
+    __tablename__ = "video_time_stamps"
 
 
 class CourseRating(SQLModel, BaseTimeStampMixin, table=True):
