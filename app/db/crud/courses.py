@@ -13,12 +13,9 @@ from app.api.v1.schemas.courses import (
     CourseFetch,
     SubjectCreate,
     SubjectFetch,
-    UnitContentCreate,
-    UnitContentFetch,
-    UnitContentUpdate,
     UnitCreate,
     UnitFetch,
-    UnitUpdate, BaseSubjectFetch,
+    UnitUpdate, BaseSubjectFetch, BaseUnit,
 )
 from app.api.v1.schemas.users import ProfileSchema
 from app.db.models.common import UserCourse, UserSubject
@@ -30,10 +27,11 @@ from app.db.models.courses import (
     CourseRating,
     Subject,
     Unit,
-    UnitContents,
+    ContentVideoTimeStamp,
 )
+from app.db.models.enrollment import CourseEnrollment
 from app.db.models.users import User
-from app.services.enum.courses import StatusEnum
+from app.services.enum.courses import StatusEnum, PaymentStatus
 from app.services.utils.crud_utils import update_model_instance
 from app.services.utils.files import format_file_path, image_save
 
@@ -153,13 +151,16 @@ async def course_update(course_id: int, db: Session, file: UploadFile) -> BaseCo
 
 
 def course_fetch_by_id(course_id: int, db: Session):
+    course = db.get(Course, course_id)
+    if not course:
+        raise NoResultFound(f"Course with pk {course_id} not found")
     statement = (
         select(
             Course,
-            func.count(UserCourse.user_id).label("student_count"),
+            func.count(CourseEnrollment.user_id).filter(CourseEnrollment.status == PaymentStatus.PAID).label("student_count"),
             func.avg(CourseRating.rating).label("course_rating"),
         )
-        .join(UserCourse, UserCourse.course_id == Course.id, isouter=True)
+        .join(CourseEnrollment, CourseEnrollment.course_id == Course.id, isouter=True)
         .join(CourseRating, CourseRating.course_id == Course.id, isouter=True)
         .options(
             selectinload(Course.categories),
@@ -249,8 +250,6 @@ def fetch_subjects_minimal(db: Session, course_id: int | None = None) -> list[Ba
     return subjects_data
 
 
-
-
 def unit_create(unit: UnitCreate, db: Session) -> UnitFetch:
     data = unit.model_dump()
     subject_id = data.get("subject_id")
@@ -311,55 +310,42 @@ def fetch_units_by_subject(subject_id: int, db: Session) -> list[UnitFetch]:
     units = db.exec(
         select(Unit)
         .options(selectinload(Unit.subject))
-        .where(Unit.subject_id == subject_id)
     )
     return [UnitFetch.from_orm(unit) for unit in units]
 
 
-def unit_content_create(
-    unit_content: UnitContentCreate, db: Session
-) -> UnitContentFetch:
-    data = unit_content.model_dump()
-    unit_instance = db.get(Unit, data.get("unit_id"))
-    if not unit_instance:
-        raise NoResultFound(f"No unit with id {data.get('unit_id')}")
-    unit_content_instance = UnitContents(**data)
-    db.add(unit_content_instance)
-    db.commit()
-    db.refresh(unit_content_instance)
-    return UnitContentFetch.from_orm(unit_content_instance)
+def fetch_minimal_units(db: Session, subject_id:int | None = None) -> list[BaseUnit]:
+    statement = select(Unit.id, Unit.title)
+    if subject_id:
+        statement = statement.where(Unit.subject_id == subject_id)
+    units = db.exec(statement).all()
+    return [BaseUnit(
+        id=unit.id,
+        title=unit.title
+    ) for unit in units]
 
 
-def unit_content_update(
-    unit_content_id: int, unit_content: UnitContentUpdate, db: Session
-) -> UnitContentFetch:
-    data = unit_content.model_dump()
-    unit_id = unit_content.get("unit_id")
-    if unit_id:
-        unit_instance = db.get(Unit, data.get("unit_id"))
-        if not unit_instance:
-            raise NoResultFound(f"No unit with id {data.get('unit_id')}")
-    updated_data = {key: value for key, value in data.items() if value is not None}
-    unit_content = db.get(UnitContents, unit_content_id)
-    if not unit_content:
-        raise NoResultFound(f"No unit content with id {unit_content_id}")
-    updated_instance = update_model_instance(unit_content, updated_data)
-    db.add(updated_instance)
-    db.commit()
-    db.refresh(updated_instance)
-    return UnitContentFetch.from_orm(updated_instance)
-
-
-def content_create(content: ContentCreate, db: Session) -> ContentFetch:
+async def content_create(content: ContentCreate, db: Session, file: UploadFile) -> ContentFetch:
     data = content.model_dump()
+    file_path = await image_save(file)
+    data["file_url"] = file_path
+    video_time_stamps = data.pop("video_time_stamps")
     unit_id = data.get("unit_id")
     unit_instance = db.get(Unit, unit_id)
     if not unit_instance:
         raise NoResultFound(f"No unit with id {unit_id}")
     content_instance = Contents(**data)
     db.add(content_instance)
+    db.flush()
+    time_stamp_instances = [
+        ContentVideoTimeStamp(
+            content_id=content_instance.id,
+            title=item.get("title"),
+            time_stamp=item.get("time_stamp"),
+        ) for item in video_time_stamps
+    ]
+    db.add_all(time_stamp_instances)
     db.commit()
-    db.refresh(content_instance)
     return ContentFetch(
         id=content_instance.id,
         title=content_instance.title,
@@ -394,23 +380,3 @@ def content_update(
         completion_time=content_instance.completion_time,
         order=content_instance.order,
     )
-
-def fetch_by_content_unit(content_unit_id: int, db: Session) -> list[ContentFetch]:
-    content_unit = db.get(UnitContents, content_unit_id)
-    if not content_unit:
-        raise NoResultFound(f"No content unit with id {content_unit_id}")
-    content_units = db.exec(
-        select(Contents)
-        .options(selectinload(Contents.unit_content))
-        .where(Contents.content_unit_id == content_unit_id)
-    )
-    return [
-        ContentFetch(
-        id=content_unit.id,
-        title=content_unit.title,
-        description=content_unit.description,
-        content_type=content_unit.content_type,
-        file_url=content_unit.file_url,
-        completion_time=content_unit.completion_time,
-        order=content_unit.order,
-    )for content_unit in content_units]

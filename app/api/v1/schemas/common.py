@@ -33,7 +33,7 @@ class BaseCommonSchema(BaseModel):
 
 class BaseCommonFetch(BaseModel):
     user_name: str | None
-    expected_completion_time: int
+    expected_completion_time: int | None = None
     status: CompletionStatusEnum
     started_at: datetime
     completed_at: datetime | None

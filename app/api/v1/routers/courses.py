@@ -3,6 +3,7 @@ from typing import Annotated
 
 from fastapi.encoders import jsonable_encoder
 from pydantic import ValidationError
+from sqlalchemy.exc import NoResultFound
 from sqlmodel import Session
 from starlette import status
 from starlette.responses import JSONResponse
@@ -18,12 +19,9 @@ from app.api.v1.schemas.courses import (
     CourseFetch,
     SubjectCreate,
     SubjectFetch,
-    UnitContentCreate,
-    UnitContentFetch,
-    UnitContentUpdate,
     UnitCreate,
     UnitFetch,
-    UnitUpdate, CourseDetailFetch, BaseSubjectFetch,
+    UnitUpdate, CourseDetailFetch, BaseSubjectFetch, BaseUnit,
 )
 from app.db.crud.courses import (
     content_create,
@@ -32,15 +30,12 @@ from app.db.crud.courses import (
     course_create,
     course_fetch_by_id,
     course_update,
-    fetch_by_content_unit,
     fetch_subjects_by_courses,
     fetch_units_by_subject,
     list_all_courses,
     subject_create,
-    unit_content_create,
-    unit_content_update,
     unit_create,
-    unit_update, get_all_categories, list_minimal_courses, fetch_all_units, fetch_subjects_minimal,
+    unit_update, get_all_categories, list_minimal_courses, fetch_all_units, fetch_subjects_minimal, fetch_minimal_units,
 )
 from app.db.session.session import get_db
 
@@ -133,6 +128,8 @@ async def update_course(
 def get_course_by_id(course_id: int, db: Annotated[Session, Depends(get_db)]):
     try:
         return course_fetch_by_id(course_id, db)
+    except NoResultFound:
+        raise HTTPException(status_code=404, detail="Course not found")
     except Exception as error:
         raise HTTPException(
             status_code=500,
@@ -241,38 +238,43 @@ def get_units_by_subject(subject_id: int, db: Annotated[Session, Depends(get_db)
         raise HTTPException(status_code=500, detail=str(error))
 
 
-@course_router.post("/unit-content/create/", response_model=UnitContentFetch)
-def create_unit_content(
-    unit_content: UnitContentCreate, db: Annotated[Session, Depends(get_db)]
-):
+@course_router.get("/unit/minimal/", response_model=list[BaseUnit])
+def minimal_units(db: Annotated[Session, Depends(get_db)]):
     try:
-        return unit_content_create(unit_content, db)
-    except ValidationError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        return fetch_minimal_units(db)
+    except ValidationError as ve:
+        return JSONResponse(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            content=jsonable_encoder({"errors": ve.errors()}),
+        )
     except Exception as error:
-        raise HTTPException(status_code=500, detail=str(error))
+        raise HTTPException(status_code=500, detail={
+            "error_type": error.__class__.__name__,
+            "error_message": str(error),
+        })
 
 
-@course_router.patch(
-    "/unit-content/update/{content_id}/", response_model=UnitContentFetch
-)
-def update_unit_fetch(
-    content_id: int,
-    unit_content: UnitContentUpdate,
-    db: Annotated[Session, Depends(get_db)],
-):
+@course_router.get("/unit/minimal/by_subject/{subject_id}/", response_model=list[BaseUnit])
+def minimal_units_by_subject(subject_id: int, db: Annotated[Session, Depends(get_db)]):
     try:
-        return unit_content_update(content_id, unit_content, db)
-    except ValidationError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        return fetch_minimal_units(db, subject_id)
+    except ValidationError as ve:
+        return JSONResponse(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            content=jsonable_encoder({"errors": ve.errors()}),
+        )
     except Exception as error:
-        raise HTTPException(status_code=500, detail=str(error))
-
+        raise HTTPException(status_code=500, detail={
+            "error_type": error.__class__.__name__,
+            "error_message": str(error),
+        })
 
 @course_router.post("/content/create/", response_model=ContentFetch)
-def create_content(content: ContentCreate, db: Annotated[Session, Depends(get_db)]):
+def create_content(db: Annotated[Session, Depends(get_db)], content: str = Form(...), file: UploadFile = File(...)):
     try:
-        return content_create(content, db)
+        data = json.loads(content)
+        content_data = ContentCreate(**data)
+        return content_create(content_data, db, file)
     except ValidationError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as error:
@@ -287,18 +289,5 @@ def update_content(
         return content_update(content_id, content, db)
     except ValidationError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    except Exception as error:
-        raise HTTPException(status_code=500, detail=str(error))
-
-
-@course_router.get(
-    "/content/list/get_by_unit_content/{unit_content_id}/",
-    response_model=list[ContentFetch],
-)
-def get_contents_by_unit_content(
-    content_id: int, db: Annotated[Session, Depends(get_db)]
-):
-    try:
-        return fetch_by_content_unit(content_id, db)
     except Exception as error:
         raise HTTPException(status_code=500, detail=str(error))

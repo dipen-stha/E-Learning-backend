@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 
-from app.api.v1.schemas.courses import BaseCourse
+from app.api.v1.schemas.courses import BaseCourse, CourseDetailFetch, SubjectFetch, CourseFetch
 from app.api.v1.schemas.users import MinimalUserFetch
 from app.services.enum.courses import PaymentMethod, PaymentStatus
 
@@ -32,3 +32,15 @@ class CourseEnrollmentUpdate(BaseModel):
 class PaymentIntentResponse(BaseModel):
     client_secret: str
     enrollment_id: int
+
+
+class UserCourseEnrollment(BaseModel):
+    course: BaseCourse | CourseFetch
+    next_subject: str | None = None
+    completion_percent: float | None = None
+    total_subjects: int | None = None
+    completed_subjects: int | None = None
+    is_completed: bool = False
+    is_started: bool = False
+    subjects: list[SubjectFetch] = []
+    instructor: str | None = None
