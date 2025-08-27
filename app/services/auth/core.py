@@ -2,6 +2,9 @@ from datetime import datetime, timedelta
 from typing import Annotated
 
 import jwt
+
+from fastapi import Depends, HTTPException, Security, status
+from fastapi.security import OAuth2PasswordBearer, SecurityScopes
 from jwt import ExpiredSignatureError, InvalidTokenError
 from pydantic import ValidationError
 from sqlmodel import Session
@@ -12,9 +15,6 @@ from app.db.models.users import User
 from app.db.session.session import get_db
 from app.services.auth.hash import verify_password
 from config import settings
-
-from fastapi import Depends, HTTPException, Security, status
-from fastapi.security import OAuth2PasswordBearer, SecurityScopes
 
 
 SECRET_KEY = settings.SECRET_KEY

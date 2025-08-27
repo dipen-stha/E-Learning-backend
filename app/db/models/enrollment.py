@@ -1,4 +1,4 @@
-from sqlmodel import SQLModel, Field, Relationship, JSON, Column
+from sqlmodel import JSON, Column, Field, Relationship, SQLModel
 
 from app.services.enum.courses import PaymentMethod, PaymentStatus
 from app.services.mixins.db_mixins import BaseTimeStampMixin

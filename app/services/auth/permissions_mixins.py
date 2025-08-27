@@ -1,10 +1,10 @@
 from typing import Annotated
 
+from fastapi import HTTPException, status
+
 from app.db.models.users import User
 from app.services.auth.core import get_current_user
 from app.services.enum.users import UserRole
-
-from fastapi import HTTPException, status
 
 
 class BaseRoleMixin:

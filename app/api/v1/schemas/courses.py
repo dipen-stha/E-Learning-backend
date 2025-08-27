@@ -1,7 +1,6 @@
 from pydantic import BaseModel, Field
 
 from app.api.v1.schemas.users import ProfileSchema
-from app.db.models.courses import Contents, Subject, Unit
 from app.services.enum.courses import ContentTypeEnum, StatusEnum
 
 
@@ -101,7 +100,6 @@ class SubjectFetch(BaseSubjectFetch):
     student_count: int | None = None
 
 
-
 class UnitFetchBase(BaseModel):
     id: int
     title: str
@@ -153,7 +151,8 @@ class BaseContent(Base):
 
 class VideoTimeStamp(BaseModel):
     title: str
-    time_stamp: str
+    time_stamp: int
+
 
 class ContentCreate(Base):
     completion_time: int = Field(ge=0)
@@ -162,6 +161,7 @@ class ContentCreate(Base):
     content_type: ContentTypeEnum
     status: StatusEnum
     video_time_stamps: list[VideoTimeStamp] = []
+    unit_id: int
 
 
 class ContentFetch(BaseContent):
@@ -170,6 +170,9 @@ class ContentFetch(BaseContent):
     description: str | None = None
     content_type: ContentTypeEnum
     file_url: str | None = None
+    course: str | None = None
+    instructor: ProfileSchema | None = None
+    status: StatusEnum
 
     class Config:
         from_attributes = True

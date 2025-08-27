@@ -1,6 +1,5 @@
-from datetime import date, datetime
+from datetime import date
 
-from psycopg2.errors import InvalidPassword
 from pydantic import BaseModel, model_validator
 from pydantic_core import ValidationError
 

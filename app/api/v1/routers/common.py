@@ -1,5 +1,8 @@
 from typing import Annotated
 
+from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.encoders import jsonable_encoder
+from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 from sqlmodel import Session
 
@@ -33,10 +36,6 @@ from app.db.crud.common import (
 from app.db.models.users import User
 from app.db.session.session import get_db
 from app.services.auth.core import get_current_user
-
-from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.encoders import jsonable_encoder
-from fastapi.responses import JSONResponse
 
 
 common_router = APIRouter(

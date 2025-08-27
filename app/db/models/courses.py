@@ -1,9 +1,9 @@
 from sqlmodel import Field, Relationship, SQLModel
 
 from app.db.models.common import UserCourse
+from app.db.models.enrollment import CourseEnrollment
 from app.services.enum.courses import ContentTypeEnum, LevelEnum, StatusEnum
 from app.services.mixins.db_mixins import BaseTimeStampMixin
-from app.db.models.enrollment import CourseEnrollment
 
 
 class CategoryCourseLink(SQLModel, table=True):
@@ -104,12 +104,14 @@ class Contents(SQLModel, BaseTimeStampMixin, table=True):
     file_url: str | None
     content_type: ContentTypeEnum = Field(default=ContentTypeEnum.TEXT)
     completion_time: int = Field(default=0, ge=0)
-    content_id: int | None = Field(foreign_key="units.id", nullable=True)
+    unit_id: int | None = Field(foreign_key="units.id", nullable=True)
     order: int | None = Field(ge=0, nullable=True)
     status: StatusEnum | None = Field(nullable=True, default=StatusEnum.DRAFT)
     unit: Unit = Relationship(back_populates="contents")
     # unit_content: UnitContents = Relationship(back_populates="contents")
-    video_time_stamps: list["ContentVideoTimeStamp"] = Relationship(back_populates="content")
+    video_time_stamps: list["ContentVideoTimeStamp"] = Relationship(
+        back_populates="content"
+    )
     # users: list["User"] = Relationship(back_populates="user_contents", link_model=UserContent)
 
     __tablename__ = "contents"

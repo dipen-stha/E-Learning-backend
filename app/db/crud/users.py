@@ -1,20 +1,26 @@
-from datetime import datetime, timedelta
+from datetime import datetime
 
+import humanize
+
+from fastapi import UploadFile
 from sqlalchemy import extract
 from sqlalchemy.orm import joinedload, selectinload
-from sqlmodel import select, Session, func
+from sqlmodel import Session, func, select
 
-from app.api.v1.schemas.users import UserCreateSchema, UserFetchSchema, StudentFetchSchema, MinimalUserFetch, UserStats, \
-    ProfileSchema
+from app.api.v1.schemas.users import (
+    MinimalUserFetch,
+    ProfileSchema,
+    StudentFetchSchema,
+    UserCreateSchema,
+    UserFetchSchema,
+    UserStats,
+)
 from app.db.models.common import UserCourse
 from app.db.models.users import Profile, User
 from app.services.auth.hash import get_password_hash
 from app.services.enum.courses import CompletionStatusEnum
 from app.services.enum.users import UserRole
-from app.services.utils.files import image_save, format_file_path
-
-from fastapi import UploadFile
-import humanize
+from app.services.utils.files import format_file_path, image_save
 
 
 def get_user_by_id(user_id: int, db: Session) -> UserFetchSchema | None:
@@ -28,12 +34,14 @@ def get_user_by_username(username: str, db: Session) -> User | None:
     user = db.exec(select(User).where(User.username == username)).first()
     return user
 
+
 def update_user_login(user: User, db: Session):
     user.last_login = datetime.now()
     db.add(user)
     db.commit()
     db.refresh(user)
     return user
+
 
 async def create_user(
     user_data: UserCreateSchema, db: Session, image: UploadFile or None = None
@@ -76,25 +84,22 @@ def get_students_list(db: Session) -> list[StudentFetchSchema]:
         select(
             UserCourse.user_id,
             func.coalesce(func.count(UserCourse.course_id), 0).label("total_courses"),
-            func.coalesce(func.count(UserCourse.course_id).filter(UserCourse.status == CompletionStatusEnum.COMPLETED), 0).label("completed_courses"),
+            func.coalesce(
+                func.count(UserCourse.course_id).filter(
+                    UserCourse.status == CompletionStatusEnum.COMPLETED
+                ),
+                0,
+            ).label("completed_courses"),
         )
         .group_by(UserCourse.user_id)
         .subquery()
     )
     statement = (
-        select(
-            User,
-            Profile,
-            sub_query.c.total_courses,
-            sub_query.c.completed_courses
-        )
+        select(User, Profile, sub_query.c.total_courses, sub_query.c.completed_courses)
         .where(Profile.role == UserRole.STUDENT)
         .join(Profile, Profile.user_id == User.id)
         .outerjoin(sub_query, sub_query.c.user_id == User.id)
-        .options(
-            joinedload(User.profile),
-            selectinload(User.user_course_links)
-        )
+        .options(joinedload(User.profile), selectinload(User.user_course_links))
         .order_by(User.id)
     )
     student_list = db.exec(statement).all()
@@ -106,42 +111,62 @@ def get_students_list(db: Session) -> list[StudentFetchSchema]:
                 gender=profile.gender,
                 dob=profile.dob,
                 avatar=format_file_path(profile.avatar),
-                role=profile.role
+                role=profile.role,
             ),
             email=user.email,
             is_active=user.is_active,
             last_login=f"{humanize.naturaldelta(datetime.now() - user.last_login) + " ago" if user.last_login else 'Not Logged In'}",
             total_courses=total_courses if total_courses else 0,
             courses_completed=completed_courses if completed_courses else 0,
-            joined_date=user.created_at.date()
-        ) for user, profile, total_courses, completed_courses in student_list
+            joined_date=user.created_at.date(),
+        )
+        for user, profile, total_courses, completed_courses in student_list
     ]
 
+
 def get_minimal_user_list(db: Session) -> list[MinimalUserFetch]:
-    users = db.exec(select(User.id, Profile.name).where(User.id == Profile.user_id, Profile.role == UserRole.TUTOR).join(Profile)).all()
+    users = db.exec(
+        select(User.id, Profile.name)
+        .where(User.id == Profile.user_id, Profile.role == UserRole.TUTOR)
+        .join(Profile)
+    ).all()
     return [MinimalUserFetch(id=user.id, name=user.name) for user in users]
+
 
 def get_user_stats(role: UserRole, db: Session):
     current_month = datetime.now().month
     statement = (
         select(
             func.count(User.id).label("total_count"),
-            func.count(User.id).filter(User.is_active == True).label("active_count"),
-            func.count(User.id).filter(User.is_active == False).label("suspended_count"),
-            func.count(User.id).filter(extract("month", User.created_at) == current_month).label("monthly_creation"),
-            func.count(User.id).filter(extract("month", User.created_at) != current_month).label("last_month_count")
+            func.count(User.id).filter(User.is_active).label("active_count"),
+            func.count(User.id).filter(not User.is_active).label("suspended_count"),
+            func.count(User.id)
+            .filter(extract("month", User.created_at) == current_month)
+            .label("monthly_creation"),
+            func.count(User.id)
+            .filter(extract("month", User.created_at) != current_month)
+            .label("last_month_count"),
         )
         .join(Profile, Profile.user_id == User.id)
         .where(Profile.role == role)
     )
-    total_count, active_count, suspended_count, monthly_creation, last_month_count = db.exec(statement).first()
+    total_count, active_count, suspended_count, monthly_creation, last_month_count = (
+        db.exec(statement).first()
+    )
     return UserStats(
         total_count=total_count,
         active_count=active_count,
         suspended_count=suspended_count,
         monthly_creation=monthly_creation,
-        percent_total_count=(total_count/(last_month_count if last_month_count else total_count)) * 100,
+        percent_total_count=(
+            total_count / (last_month_count if last_month_count else total_count)
+        )
+        * 100,
         percent_active_count=(active_count / total_count) * 100,
-        percent_monthly_creation=(monthly_creation/(last_month_count if last_month_count else monthly_creation)) * 100,
-        percent_suspended_count=(suspended_count / total_count) * 100
+        percent_monthly_creation=(
+            monthly_creation
+            / (last_month_count if last_month_count else monthly_creation)
+        )
+        * 100,
+        percent_suspended_count=(suspended_count / total_count) * 100,
     )

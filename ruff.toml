@@ -81,7 +81,9 @@ extend-ignore = [
     "RUF012",
     "E501",
     "Q000",
-    "Q001"
+    "Q001",
+    "F821",
+    "B008"
 ]
 # Ignore variables with underscores for undefined variable checks (F821)
 dummy-variable-rgx = "^_+$|_.*"
@@ -100,7 +102,6 @@ section-order = [
 ]
 
 forced-separate = [
-  "fastapi",
   "app.db",
     "app.db.",
     "app.api.v1.routers",
@@ -108,11 +109,10 @@ forced-separate = [
     "app.services",
 ]
 
-combine-as-imports = true
-force-sort-within-sections = true
+lines-between-types = 1
+combine-as-imports = false
 lines-after-imports = 2
 split-on-trailing-comma = false
-order-by-type = false
 force-single-line = false
 force-wrap-aliases = false
 
