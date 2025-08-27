@@ -273,6 +273,11 @@ def fetch_subjects_minimal(
     return subjects_data
 
 
+def fetch_subjects_by_id(subject_id: int, db: Session) -> list[BaseSubjectFetch]:
+    pass
+
+
+
 def unit_create(unit: UnitCreate, db: Session) -> UnitFetch:
     data = unit.model_dump()
     subject_id = data.get("subject_id")

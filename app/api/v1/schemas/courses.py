@@ -100,6 +100,17 @@ class SubjectFetch(BaseSubjectFetch):
     student_count: int | None = None
 
 
+class DetailedSubjectFetch(BaseModel):
+    id: int
+    title: str
+    course_title: str
+    completion_percent: int
+    total_units: int
+    completed_units: int
+    completion_time: int
+    units: list["UnitWithContents"]
+
+
 class UnitFetchBase(BaseModel):
     id: int
     title: str
@@ -121,6 +132,13 @@ class BaseUnit(Base):
 
     class Config:
         from_attributes = True
+
+
+class UnitWithContents(BaseModel):
+    id: int
+    title: str
+    completion_time: int
+    # contents: list[]
 
 
 class UnitFetch(BaseUnit):
