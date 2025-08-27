@@ -36,3 +36,6 @@ MEDIA_DIR.mkdir(parents=True, exist_ok=True)
 
 COURSES_DIR = MEDIA_DIR / "courses"
 COURSES_DIR.mkdir(parents=True, exist_ok=True)
+
+CONTENT_DIR = COURSES_DIR / "content"
+CONTENT_DIR.mkdir(parents=True, exist_ok=True)

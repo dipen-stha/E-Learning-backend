@@ -1,34 +1,51 @@
 from fastapi import HTTPException
-from sqlalchemy import func, Integer, Boolean
+from sqlalchemy import Boolean, Integer, func
 from sqlalchemy.exc import NoResultFound
-from sqlalchemy.orm import selectinload, joinedload
-from sqlmodel import select, Session, and_, asc, case, cast
+from sqlalchemy.orm import selectinload
+from sqlmodel import Session, and_, asc, case, cast, select
 from sqlmodel.sql import expression
 
-from app.api.v1.schemas.courses import SubjectFetch, UserUnitDetail, CourseFetch
+from app.api.v1.schemas.courses import CourseFetch, SubjectFetch, UserUnitDetail
+from app.api.v1.schemas.enrollment import (
+    CourseEnrollmentCreate,
+    CourseEnrollmentUpdate,
+    UserCourseEnrollment,
+)
 from app.db.crud.common import get_subject_detail_with_unit_counts
 from app.db.models.common import UserCourse, UserSubject
 from app.db.models.courses import Course, Subject
 from app.db.models.enrollment import CourseEnrollment
-from app.api.v1.schemas.enrollment import CourseEnrollmentCreate, CourseEnrollmentFetch, CourseEnrollmentUpdate, \
-    UserCourseEnrollment
 from app.db.models.users import User
-from app.services.enum.courses import PaymentStatus, CompletionStatusEnum
+from app.services.enum.courses import CompletionStatusEnum, PaymentStatus
 from app.services.utils.crud_utils import update_model_instance
 from app.services.utils.files import format_file_path
 
 
-def course_enrollment_create(enrollment_data: CourseEnrollmentCreate, provider_payment_id: str, metadata:dict, db: Session) -> CourseEnrollment:
+def course_enrollment_create(
+    enrollment_data: CourseEnrollmentCreate,
+    provider_payment_id: str,
+    metadata: dict,
+    db: Session,
+) -> CourseEnrollment:
     data = enrollment_data.model_dump()
-    course_enrollment = CourseEnrollment(provider_payment_id=provider_payment_id, metadata=metadata, **data)
+    course_enrollment = CourseEnrollment(
+        provider_payment_id=provider_payment_id, metadata=metadata, **data
+    )
     db.add(course_enrollment)
     db.commit()
     db.refresh(course_enrollment)
     return course_enrollment
 
-def course_enrollment_payment_update(enrollment_id: int, enrollment_data: CourseEnrollmentUpdate, db: Session) -> CourseEnrollment:
+
+def course_enrollment_payment_update(
+    enrollment_id: int, enrollment_data: CourseEnrollmentUpdate, db: Session
+) -> CourseEnrollment:
     data = enrollment_data.model_dump()
-    enrollment_instance = db.exec(select(CourseEnrollment).where(CourseEnrollment.provider_payment_id == enrollment_id)).first()
+    enrollment_instance = db.exec(
+        select(CourseEnrollment).where(
+            CourseEnrollment.provider_payment_id == enrollment_id
+        )
+    ).first()
     if not enrollment_instance:
         raise HTTPException(status_code=404, detail="Enrollment not found")
     updated_instance = update_model_instance(enrollment_instance, data)
@@ -37,6 +54,7 @@ def course_enrollment_payment_update(enrollment_id: int, enrollment_data: Course
     db.refresh(updated_instance)
     print(data.get("status"))
     return updated_instance
+
 
 def fetch_user_enrollments(user_id: int, db: Session):
     user = db.get(User, user_id)
@@ -57,54 +75,91 @@ def fetch_user_enrollments(user_id: int, db: Session):
         .scalar_subquery()
     )
     is_started_statement = cast(
-            case((and_(UserCourse.user_id == user_id, UserCourse.course_id == CourseEnrollment.course_id), True), else_=False),
-            Boolean)
+        case(
+            (
+                and_(
+                    UserCourse.user_id == user_id,
+                    UserCourse.course_id == CourseEnrollment.course_id,
+                ),
+                True,
+            ),
+            else_=False,
+        ),
+        Boolean,
+    )
     is_completed_statement = cast(
-        case((and_(UserCourse.user_id == user_id, UserCourse.course_id == CourseEnrollment.course_id, UserCourse.status == CompletionStatusEnum.COMPLETED), True),
-             else_=False),
-        Boolean
+        case(
+            (
+                and_(
+                    UserCourse.user_id == user_id,
+                    UserCourse.course_id == CourseEnrollment.course_id,
+                    UserCourse.status == CompletionStatusEnum.COMPLETED,
+                ),
+                True,
+            ),
+            else_=False,
+        ),
+        Boolean,
     )
     statement = (
         select(
             CourseEnrollment,
             func.count(Subject.id).label("subject_counts"),
-            func.count(expression.cast(
-                UserSubject.status == CompletionStatusEnum.COMPLETED, Integer
-            )).label("completed_counts"),
+            func.count(
+                expression.cast(
+                    UserSubject.status == CompletionStatusEnum.COMPLETED, Integer
+                )
+            ).label("completed_counts"),
             subject_statement.label("next_subject"),
         )
         .select_from(CourseEnrollment)
         .join(Course, CourseEnrollment.course_id == Course.id)
         .join(Subject, Subject.course_id == Course.id)
         .outerjoin(UserSubject)
-        .where(CourseEnrollment.user_id == user.id, CourseEnrollment.status == PaymentStatus.PAID)
+        .where(
+            CourseEnrollment.user_id == user.id,
+            CourseEnrollment.status == PaymentStatus.PAID,
+        )
         .group_by(CourseEnrollment.id)
     )
     user_enrollments = db.exec(statement).all()
-    return [UserCourseEnrollment(
-        course=CourseFetch(
-            id=course_enrollment.course.id,
-            title=course_enrollment.course.title,
-            completion_time=course_enrollment.course.completion_time,
-            image_url=format_file_path(course_enrollment.course.image_url)
-        ),
-        instructor=course_enrollment.course.instructor.profile.name,
-        next_subject=next_subject,
-        total_subjects=total_subjects,
-        completed_subjects=completed_subjects,
-    )
+    return [
+        UserCourseEnrollment(
+            course=CourseFetch(
+                id=course_enrollment.course.id,
+                title=course_enrollment.course.title,
+                completion_time=course_enrollment.course.completion_time,
+                image_url=format_file_path(course_enrollment.course.image_url),
+            ),
+            instructor=course_enrollment.course.instructor.profile.name,
+            next_subject=next_subject,
+            total_subjects=total_subjects,
+            completed_subjects=completed_subjects,
+        )
         for course_enrollment, total_subjects, completed_subjects, next_subject in user_enrollments
     ]
+
 
 def fetch_user_enrollments_by_course(user_id: int, course_id: int, db: Session):
     course = db.get(Course, course_id)
     if not course:
         raise NoResultFound(f"Course with pk {course_id} not found")
-    user_course = db.exec(select(UserCourse).where(UserCourse.course_id == course.id, UserCourse.user_id == user_id)).first()
-    subject_details  = {subject.id: subject for subject in get_subject_detail_with_unit_counts(course_id, user_id, db)}
+    user_course = db.exec(
+        select(UserCourse).where(
+            UserCourse.course_id == course.id, UserCourse.user_id == user_id
+        )
+    ).first()
+    subject_details = {
+        subject.id: subject
+        for subject in get_subject_detail_with_unit_counts(course_id, user_id, db)
+    }
     subject_subquery = (
         select(Subject.title)
-        .join(UserSubject, and_(UserSubject.subject_id == Subject.id, UserSubject.user_id == user_id), isouter=True)\
+        .join(
+            UserSubject,
+            and_(UserSubject.subject_id == Subject.id, UserSubject.user_id == user_id),
+            isouter=True,
+        )
         .where(Subject.order is not None, Subject.course_id == course_id)
         .order_by(asc(Subject.order))
         .limit(1)
@@ -114,10 +169,10 @@ def fetch_user_enrollments_by_course(user_id: int, course_id: int, db: Session):
         select(
             CourseEnrollment,
             func.count(Subject.id).label("total_subjects"),
-            func.count(Subject.id).filter(
-                UserSubject.status == CompletionStatusEnum.COMPLETED
-            ).label("completed_counts"),
-            subject_subquery.label("next_subject")
+            func.count(Subject.id)
+            .filter(UserSubject.status == CompletionStatusEnum.COMPLETED)
+            .label("completed_counts"),
+            subject_subquery.label("next_subject"),
         )
         .join(Course, Course.id == CourseEnrollment.course_id)
         .join(Subject, Subject.course_id == course_id)
@@ -126,7 +181,7 @@ def fetch_user_enrollments_by_course(user_id: int, course_id: int, db: Session):
             selectinload(CourseEnrollment.user).selectinload(User.profile),
             selectinload(CourseEnrollment.course)
             .selectinload(Course.subjects)
-            .selectinload(Subject.units)
+            .selectinload(Subject.units),
         )
         .where(
             CourseEnrollment.user_id == user_id,
@@ -145,19 +200,44 @@ def fetch_user_enrollments_by_course(user_id: int, course_id: int, db: Session):
         total_subjects=total_subjects,
         completed_subjects=completed_subjects,
         is_started=bool(user_course),
-        is_completed=True if (user_course and user_course.status == CompletionStatusEnum.COMPLETED) else False,
+        is_completed=(
+            True
+            if (user_course and user_course.status == CompletionStatusEnum.COMPLETED)
+            else False
+        ),
         subjects=[
             SubjectFetch(
                 id=subject.id,
                 title=subject.title,
                 completion_time=subject.completion_time,
                 order=subject.order,
-                units=[UserUnitDetail(id=unit.id, title=unit.title, is_completed=subject_details.get(subject.id).is_completed) for unit in subject.units],
-                total_units=subject_details.get(subject.id).total_units if subject_details.get(subject.id) else 0,
-                completed_units=subject_details.get(subject.id).completed_units if subject_details.get(subject.id) else 0,
+                units=[
+                    UserUnitDetail(
+                        id=unit.id,
+                        title=unit.title,
+                        is_completed=subject_details.get(subject.id).is_completed,
+                    )
+                    for unit in subject.units
+                ],
+                total_units=(
+                    subject_details.get(subject.id).total_units
+                    if subject_details.get(subject.id)
+                    else 0
+                ),
+                completed_units=(
+                    subject_details.get(subject.id).completed_units
+                    if subject_details.get(subject.id)
+                    else 0
+                ),
                 completion_percent=(
-                    subject_details.get(subject.id).completed_units/subject_details.get(subject.id).total_units
-                ) * 100 if subject_details.get(subject.id) else 0
+                    (
+                        subject_details.get(subject.id).completed_units
+                        / subject_details.get(subject.id).total_units
+                    )
+                    * 100
+                    if subject_details.get(subject.id)
+                    else 0
+                ),
             )
             for subject in course_enrollment.course.subjects
         ],

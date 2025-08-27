@@ -1,6 +1,3 @@
-
-
-
 # class UserCourseEnrollment(SQLModel, BaseTimeStampMixin, table=True):
 #     id: int | None = Field(default=None, primary_key=True)
 #     course_id: int = Field(foreign_key="courses.id")

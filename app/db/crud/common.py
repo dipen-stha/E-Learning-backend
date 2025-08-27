@@ -1,9 +1,10 @@
 from datetime import datetime
 
+from fastapi import HTTPException
 from sqlalchemy.exc import IntegrityError, NoResultFound
 from sqlalchemy.orm import joinedload, selectinload
 from sqlalchemy.types import Integer
-from sqlmodel import and_, asc, func, select, Session, case, or_
+from sqlmodel import Session, and_, asc, case, func, select
 from sqlmodel.sql import expression
 
 from app.api.v1.schemas.common import (
@@ -24,8 +25,6 @@ from app.db.models.courses import Contents, Course, Subject, Unit
 from app.db.models.users import User
 from app.services.enum.courses import CompletionStatusEnum
 from app.services.utils.crud_utils import create_model_instance, update_model_instance
-
-from fastapi import HTTPException
 
 
 def user_course_create(user_course: UserCourseCreate, db: Session) -> UserCourseFetch:
@@ -121,7 +120,9 @@ def get_subject_detail_with_unit_counts(course_id: int, user_id: int, db: Sessio
     completed_unit_counts = func.count(
         case((UserUnit.status == CompletionStatusEnum.COMPLETED, 1), else_=None)
     ).label("completed_units")
-    unit_completed_statement = case((UserUnit.status == CompletionStatusEnum.COMPLETED, True), else_=False).label("is_completed")
+    unit_completed_statement = case(
+        (UserUnit.status == CompletionStatusEnum.COMPLETED, True), else_=False
+    ).label("is_completed")
 
     statement = (
         select(
@@ -129,10 +130,12 @@ def get_subject_detail_with_unit_counts(course_id: int, user_id: int, db: Sessio
             Subject.title,
             total_unit_counts,
             completed_unit_counts,
-            unit_completed_statement
+            unit_completed_statement,
         )
         .join(Unit, Unit.subject_id == Subject.id)
-        .outerjoin(UserUnit, (UserUnit.user_id == user_id) & (UserUnit.unit_id == Unit.id))
+        .outerjoin(
+            UserUnit, (UserUnit.user_id == user_id) & (UserUnit.unit_id == Unit.id)
+        )
         .where(Subject.course_id == course_id)
         .group_by(Subject.id, Subject.title, UserUnit)
     )
@@ -146,7 +149,10 @@ def user_course_fetch_by_id(
     if not user_course:
         raise NoResultFound(f"Course with id {course_id} not found")
     user_id = user.id
-    subject_details = {subject.id: subject for subject in get_subject_detail_with_unit_counts(course_id, user_id, db)}
+    subject_details = {
+        subject.id: subject
+        for subject in get_subject_detail_with_unit_counts(course_id, user_id, db)
+    }
     subject_subquery = (
         (
             select(Subject.title).join(
@@ -210,12 +216,33 @@ def user_course_fetch_by_id(
                 title=subject.title,
                 completion_time=subject.completion_time,
                 order=subject.order,
-                units=[UserUnitDetail(id=unit.id, title=unit.title, is_completed=subject_details.get(subject.id).is_completed) for unit in subject.units],
-                total_units=subject_details.get(subject.id).total_units if subject_details.get(subject.id) else 0,
-                completed_units=subject_details.get(subject.id).completed_units if subject_details.get(subject.id) else 0,
+                units=[
+                    UserUnitDetail(
+                        id=unit.id,
+                        title=unit.title,
+                        is_completed=subject_details.get(subject.id).is_completed,
+                    )
+                    for unit in subject.units
+                ],
+                total_units=(
+                    subject_details.get(subject.id).total_units
+                    if subject_details.get(subject.id)
+                    else 0
+                ),
+                completed_units=(
+                    subject_details.get(subject.id).completed_units
+                    if subject_details.get(subject.id)
+                    else 0
+                ),
                 completion_percent=(
-                    subject_details.get(subject.id).completed_units/subject_details.get(subject.id).total_units
-                ) * 100 if subject_details.get(subject.id) else 0
+                    (
+                        subject_details.get(subject.id).completed_units
+                        / subject_details.get(subject.id).total_units
+                    )
+                    * 100
+                    if subject_details.get(subject.id)
+                    else 0
+                ),
             )
             for subject in user_course.course.subjects
         ],

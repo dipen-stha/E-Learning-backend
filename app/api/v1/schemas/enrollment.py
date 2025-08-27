@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 
-from app.api.v1.schemas.courses import BaseCourse, CourseDetailFetch, SubjectFetch, CourseFetch
+from app.api.v1.schemas.courses import BaseCourse, CourseFetch, SubjectFetch
 from app.api.v1.schemas.users import MinimalUserFetch
 from app.services.enum.courses import PaymentMethod, PaymentStatus
 

@@ -1,5 +1,7 @@
 from typing import Annotated
 
+from fastapi import APIRouter, Depends, HTTPException
+from fastapi.security import OAuth2PasswordRequestForm
 from jwt import ExpiredSignatureError, InvalidTokenError
 from sqlmodel import Session
 
@@ -14,9 +16,6 @@ from app.services.auth.core import (
     create_tokens,
     get_current_user,
 )
-
-from fastapi import APIRouter, Depends, HTTPException
-from fastapi.security import OAuth2PasswordRequestForm
 
 
 auth_router = APIRouter(prefix="/auth", tags=["Authentication"])
@@ -48,8 +47,8 @@ def login(
 
 @auth_router.post("/admin/login/", response_model=Token)
 def admin_login(
-        data: Annotated[OAuth2PasswordRequestForm, Depends()],
-        db: Annotated[Session, Depends(get_db)],
+    data: Annotated[OAuth2PasswordRequestForm, Depends()],
+    db: Annotated[Session, Depends(get_db)],
 ):
     try:
         user, _ = authenticate_user(data.username, data.password, db)
@@ -72,6 +71,7 @@ def admin_login(
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @auth_router.post("/refresh/", response_model=Token, response_model_exclude_none=True)
 def refresh(token_data: TokenRefreshData, db: Annotated[Session, Depends(get_db)]):
@@ -105,16 +105,20 @@ def get_authenticate_user(
 
 
 @auth_router.get(
-    "/admin/me/", response_model=UserFetchSchema, dependencies=[Depends(get_current_user)]
+    "/admin/me/",
+    response_model=UserFetchSchema,
+    dependencies=[Depends(get_current_user)],
 )
 def get_admin_authenticated_user(
-        user: Annotated[User, Depends(get_current_user)],
-        db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
 ):
     try:
         user_instance = get_user_by_id(user.id, db)
         if not user.is_admin and not user.is_superuser:
-            raise HTTPException(status_code=403, detail="User is not authorized to perform this action")
+            raise HTTPException(
+                status_code=403, detail="User is not authorized to perform this action"
+            )
         user = UserFetchSchema.model_validate(user_instance)
         return user
     except Exception as e:
