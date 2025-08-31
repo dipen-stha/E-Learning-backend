@@ -17,8 +17,8 @@ from app.services.utils.crud_utils import get_model_instance_by_id
 
 
 class BaseCommonSchema(BaseModel):
-    user_id: int
-    expected_completion_time: int = Field(ge=0)
+    user_id: int | None = None
+    # expected_completion_time: int = Field(ge=0)
     status: CompletionStatusEnum = Field(default=CompletionStatusEnum.IN_PROGRESS)
     started_at: datetime = Field(default_factory=datetime.now)
     completed_at: datetime | None = None
@@ -131,3 +131,15 @@ class UserSubjectFetch(BaseCommonFetch):
 
     class Config:
         from_attributes = True
+
+
+class UserSubjectUnitStatus(BaseModel):
+    total_units: int
+    completed_units: int
+    completion_percent: float = 0
+
+
+class UserUnitStatus(BaseModel):
+    unit_id: int
+    status: CompletionStatusEnum = CompletionStatusEnum.NOT_STARTED
+    is_started: bool = False
