@@ -32,7 +32,7 @@ class BaseCommonSchema(BaseModel):
 
 
 class BaseCommonFetch(BaseModel):
-    user_name: str | None
+    user_name: str | None = None
     expected_completion_time: int | None = None
     status: CompletionStatusEnum
     started_at: datetime
@@ -44,6 +44,11 @@ class BaseCommonFetch(BaseModel):
 
 class BaseCommonUpdate(BaseModel):
     status: CompletionStatusEnum | None
+
+
+class UpcomingCourseSubjects(BaseModel):
+    course_id: int
+    subject: BaseSubjectFetch
 
 
 class UserCourseCreate(BaseCommonSchema):
@@ -114,6 +119,12 @@ class UserUnitFetch(BaseCommonFetch):
         from_attributes = True
 
 
+class UserUnitStatusUpdate(BaseModel):
+    status: CompletionStatusEnum
+    unit_id: int
+    user_id: int | None = None
+
+
 class UserSubjectCreate(BaseCommonSchema):
     subject_id: int
 
@@ -133,6 +144,11 @@ class UserSubjectFetch(BaseCommonFetch):
         from_attributes = True
 
 
+class UserSubjectStatus(BaseModel):
+    id: int
+    status: CompletionStatusEnum | None
+
+
 class UserSubjectUnitStatus(BaseModel):
     total_units: int
     completed_units: int
@@ -142,4 +158,9 @@ class UserSubjectUnitStatus(BaseModel):
 class UserUnitStatus(BaseModel):
     unit_id: int
     status: CompletionStatusEnum = CompletionStatusEnum.NOT_STARTED
-    is_started: bool = False
+    contents: list["UserContentStatus"] = []
+
+
+class UserContentStatus(BaseModel):
+    content_id: int
+    status: CompletionStatusEnum = CompletionStatusEnum.NOT_STARTED

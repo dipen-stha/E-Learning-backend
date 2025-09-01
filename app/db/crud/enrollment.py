@@ -1,5 +1,5 @@
 from fastapi import HTTPException
-from sqlalchemy import Boolean, Integer, func
+from sqlalchemy import Boolean, Integer, func, text
 from sqlalchemy.exc import NoResultFound
 from sqlalchemy.orm import selectinload
 from sqlmodel import Session, and_, asc, case, cast, select
@@ -60,57 +60,29 @@ def fetch_user_enrollments(user_id: int, db: Session):
     user = db.get(User, user_id)
     if not user:
         raise HTTPException(status_code=404, detail=f"User with pk {user_id} not found")
-    subject_statement = (
-        select(Subject.title)
-        .join(
-            UserSubject,
-            and_(UserSubject.subject_id == Subject.id, UserSubject.user_id == user_id),
-            isouter=True,
-        )
-        .where(
-            Subject.order is not None,
-        )
-        .order_by(asc(Subject.order))
-        .limit(1)
-        .scalar_subquery()
-    )
-    is_started_statement = cast(
-        case(
-            (
-                and_(
-                    UserCourse.user_id == user_id,
-                    UserCourse.course_id == CourseEnrollment.course_id,
-                ),
-                True,
-            ),
-            else_=False,
-        ),
-        Boolean,
-    )
-    is_completed_statement = cast(
-        case(
-            (
-                and_(
-                    UserCourse.user_id == user_id,
-                    UserCourse.course_id == CourseEnrollment.course_id,
-                    UserCourse.status == CompletionStatusEnum.COMPLETED,
-                ),
-                True,
-            ),
-            else_=False,
-        ),
-        Boolean,
-    )
+    # subject_statement = (
+    #     select(Subject.id, Subject.title)
+    #     .join(
+    #         UserSubject,
+    #         and_(UserSubject.subject_id == Subject.id, UserSubject.user_id == user_id),
+    #         isouter=True,
+    #     )
+    #     .where(
+    #         Subject.course_id == Course.id,
+    #         Subject.order is not None,
+    #     )
+    #     .order_by(asc(Subject.order))
+    #     .limit(1)
+    #     .correlate(Course)
+    #     .subquery()
+    # )
     statement = (
         select(
             CourseEnrollment,
+            # subject_statement.c.id, subject_statement.c.title,
             func.count(Subject.id).label("subject_counts"),
-            func.count(
-                expression.cast(
-                    UserSubject.status == CompletionStatusEnum.COMPLETED, Integer
-                )
-            ).label("completed_counts"),
-            subject_statement.label("next_subject"),
+            func.count(UserSubject.subject_id).filter(UserSubject.status == CompletionStatusEnum.COMPLETED)
+            .label("completed_counts"),
         )
         .select_from(CourseEnrollment)
         .join(Course, CourseEnrollment.course_id == Course.id)
@@ -132,11 +104,10 @@ def fetch_user_enrollments(user_id: int, db: Session):
                 image_url=format_file_path(course_enrollment.course.image_url),
             ),
             instructor=course_enrollment.course.instructor.profile.name,
-            next_subject=next_subject,
             total_subjects=total_subjects,
             completed_subjects=completed_subjects,
         )
-        for course_enrollment, total_subjects, completed_subjects, next_subject in user_enrollments
+        for course_enrollment, total_subjects, completed_subjects in user_enrollments
     ]
 
 

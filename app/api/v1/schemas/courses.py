@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field
 
-from app.api.v1.schemas.users import ProfileSchema
+from app.api.v1.schemas.users import ProfileSchema, MinimalUserFetch
 from app.services.enum.courses import ContentTypeEnum, StatusEnum
 
 
@@ -50,10 +50,21 @@ class CourseFetch(BaseCourse):
     image_url: str | None
 
 
+class LatestCourseFetch(BaseModel):
+    id: int
+    title: str
+    completion_time: int
+    price: float
+    instructor_name: str
+    image_url: str | None
+    student_count: int | None
+    course_rating: int | None
+
+
 class CourseDetailFetch(CourseFetch):
     student_count: int | None
     course_rating: float | None
-    categories: list[str]
+    categories: list[str] = []
     subjects: list["SubjectFetch"] | list[str] = []
     total_revenue: float | None = None
     status: StatusEnum

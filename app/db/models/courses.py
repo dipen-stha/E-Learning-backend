@@ -80,6 +80,7 @@ class Unit(SQLModel, BaseTimeStampMixin, table=True):
     subject: Subject = Relationship(back_populates="units")
     contents: list["Contents"] = Relationship(back_populates="unit")
     # users: list["User"] = Relationship(back_populates="user_units", link_model=UserUnit)
+    user_unit_links: list["UserUnit"] = Relationship(back_populates="unit")
 
     __tablename__ = "units"
 
@@ -112,6 +113,7 @@ class Contents(SQLModel, BaseTimeStampMixin, table=True):
     video_time_stamps: list["ContentVideoTimeStamp"] = Relationship(
         back_populates="content"
     )
+    user_content_links: list["UserContent"] = Relationship(back_populates="content")
     # users: list["User"] = Relationship(back_populates="user_contents", link_model=UserContent)
 
     __tablename__ = "contents"

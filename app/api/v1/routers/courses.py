@@ -26,7 +26,7 @@ from app.api.v1.schemas.courses import (
     SubjectFetch,
     UnitCreate,
     UnitFetch,
-    UnitUpdate,
+    UnitUpdate, LatestCourseFetch,
 )
 from app.db.crud.courses import (
     content_create,
@@ -46,10 +46,11 @@ from app.db.crud.courses import (
     list_minimal_courses,
     subject_create,
     unit_create,
-    unit_update, subject_fetch_by_id,
+    unit_update, subject_fetch_by_id, fetch_latest_courses,
 )
+from app.db.models.users import User
 from app.db.session.session import get_db
-
+from app.services.auth.core import get_current_user
 
 course_router = APIRouter(prefix="/courses", tags=["Courses"])
 
@@ -69,6 +70,24 @@ def get_categories(db: Annotated[Session, Depends(get_db)]):
     except Exception as error:
         raise HTTPException(status_code=500, detail=str(error))
 
+
+@course_router.get("/get/latest-courses/", response_model=list[LatestCourseFetch])
+def get_latest_courses(db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(get_current_user)]):
+    try:
+        return fetch_latest_courses(db, user.id)
+    except ValidationError as error:
+        return JSONResponse(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            content=jsonable_encoder({"errors": error.errors()}),
+        )
+    except Exception as error:
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error_type": error.__class__.__name__,
+                "error_message": str(error),
+            },
+        )
 
 @course_router.get("/get/all/", response_model=list[CourseDetailFetch])
 def get_all_courses(db: Annotated[Session, Depends(get_db)]):

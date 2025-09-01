@@ -16,7 +16,7 @@ from app.api.v1.schemas.common import (
     UserSubjectCreate,
     UserSubjectFetch,
     UserUnitCreate,
-    UserUnitFetch,
+    UserUnitFetch, BaseCommonFetch, UserUnitStatusUpdate,
 )
 from app.db.crud.common import (
     user_content_create,
@@ -31,7 +31,8 @@ from app.db.crud.common import (
     user_subject_update,
     user_unit_create,
     user_unit_fetch,
-    user_unit_update, user_subject_fetch_by_subject, fetch_user_units_by_subject,
+    user_unit_update, user_subject_fetch_by_subject, fetch_user_units_by_subject, fetch_subject_status_by_course_id,
+    fetch_user_upcoming_subjects, user_unit_status_update,
 )
 from app.db.models.users import User
 from app.db.session.session import get_db
@@ -71,6 +72,15 @@ def fetch_user_courses(user_id: int, db: Annotated[Session, Depends(get_db)]):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={"error": f"{e}"}
         )
 
+@common_router.get("/user-course/upcoming-subjects/")
+def fetch_upcoming_subjects(user: Annotated[User, Depends(get_current_user)], db: Annotated[Session, Depends(get_db)]):
+    try:
+        return fetch_user_upcoming_subjects(db, user.id)
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={
+            "error_type": e.__class__.__name__,
+            "error": str(e),
+        })
 
 @common_router.get("/user-course/fetch-by-course/{course_id}/")
 def fetch_user_course_by_course_id(
@@ -119,7 +129,17 @@ def update_user_course(
         raise HTTPException(status_code=500, detail=str(error))
 
 
-@common_router.post("/user-subject/create/", response_model=UserSubjectFetch)
+@common_router.get("/user-course/{course_id}/subject-status/")
+def course_user_subject_status(course_id: int, db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(get_current_user)]):
+    try:
+        return fetch_subject_status_by_course_id(course_id, user.id, db)
+    except Exception as error:
+        raise HTTPException(status_code=500, detail={
+            "error_type": error.__class__.__name__,
+            "error_message": str(error),
+        })
+
+@common_router.post("/user-subject/create/", response_model=BaseCommonFetch)
 def create_user_subject(
     user_subject: UserSubjectCreate, db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(get_current_user)]
 ):
@@ -185,6 +205,18 @@ def fetch_user_unit(user_id: int, db: Annotated[Session, Depends(get_db)]):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
+@common_router.patch("/user-unit/status-update/")
+def update_user_unit_status(user_unit: UserUnitStatusUpdate, user: Annotated[User, Depends(get_current_user)], db: Annotated[Session, Depends(get_db)]):
+    try:
+        user_unit.user_id = user.id
+        user_unit_status_update(user_unit, db)
+        return {"data": "Success"}
+    except Exception as error:
+        raise HTTPException(status_code=500, detail={
+            "error_type": error.__class__.__name__,
+            "error_message": str(error),
+        })
 
 @common_router.patch(
     "/user-unit/update/{user_unit_id}/", response_model=list[UserUnitFetch]

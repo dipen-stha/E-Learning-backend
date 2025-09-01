@@ -1,7 +1,8 @@
 from fastapi import UploadFile
+from sqlalchemy import exists
 from sqlalchemy.exc import NoResultFound
 from sqlalchemy.orm import joinedload, selectinload
-from sqlmodel import Session, func, select
+from sqlmodel import Session, func, select, desc, and_
 
 from app.api.v1.schemas.courses import (
     BaseCourse,
@@ -18,7 +19,7 @@ from app.api.v1.schemas.courses import (
     SubjectFetch,
     UnitCreate,
     UnitFetch,
-    UnitUpdate, SubjectDetailedFetch, UnitWithContents, VideoTimeStamps,
+    UnitUpdate, SubjectDetailedFetch, UnitWithContents, VideoTimeStamps, LatestCourseFetch,
 )
 from app.api.v1.schemas.users import ProfileSchema
 from app.db.models.common import UserCourse, UserSubject, UserUnit
@@ -33,7 +34,7 @@ from app.db.models.courses import (
     Unit,
 )
 from app.db.models.enrollment import CourseEnrollment
-from app.db.models.users import User
+from app.db.models.users import User, Profile
 from app.services.enum.courses import PaymentStatus, StatusEnum
 from app.services.utils.crud_utils import update_model_instance
 from app.services.utils.files import format_file_path, image_save
@@ -62,6 +63,45 @@ def list_minimal_courses(db: Session) -> list[BaseCourse]:
             title=course.title,
         )
         for course in courses
+    ]
+
+
+def fetch_latest_courses(db: Session, user_id: int | None = None) -> list[LatestCourseFetch]:
+    student_count_expr = func.count(CourseEnrollment.user_id).label("student_count")
+    rating_calculate_expr = func.avg(CourseRating.rating)
+    statement = (
+        select(
+            Course, student_count_expr, rating_calculate_expr
+        )
+        .select_from(Course)
+        .join(CourseEnrollment, CourseEnrollment.course_id == Course.id, isouter=True)
+        .join(CourseRating, CourseRating.course_id == Course.id, isouter=True)
+        .join(User, Course.instructor_id == User.id)
+        .join(Profile, User.id == Profile.id)
+        .options(selectinload(Course.instructor).selectinload(User.profile))
+        .order_by(desc(Course.created_at))
+        .group_by(Course.id)
+    )
+    if user_id:
+        statement = statement.where(
+            ~exists().where(
+                (CourseEnrollment.course_id == Course.id) &
+                (CourseEnrollment.user_id == user_id)
+            ).correlate(Course)
+        )
+    latest_courses = db.exec(statement).all()
+    return [
+        LatestCourseFetch(
+            id=course.id,
+            title=course.title,
+            price=course.price,
+            completion_time=course.completion_time,
+            student_count=student_count,
+            course_rating=course_rating,
+            image_url=format_file_path(course.image_url),
+            instructor_name=course.instructor.profile.name,
+        )
+        for course, student_count, course_rating in latest_courses[:5]
     ]
 
 
@@ -281,6 +321,7 @@ def subject_fetch_by_id(subject_id: int, db: Session):
     statement = (
         select(Subject)
         .options(selectinload(Subject.course), selectinload(Subject.units).selectinload(Unit.contents).selectinload(Contents.video_time_stamps))
+        .where(Subject.id == subject.id)
     )
     subject_instance = db.exec(statement).first()
     return SubjectDetailedFetch(
