@@ -138,7 +138,8 @@ class UnitWithContents(BaseModel):
     id: int
     title: str
     completion_time: int
-    # contents: list[]
+    contents: list["ContentFetch"]
+    is_started: bool = False
 
 
 class UnitFetch(BaseUnit):
@@ -191,9 +192,16 @@ class ContentFetch(BaseContent):
     course: str | None = None
     instructor: ProfileSchema | None = None
     status: StatusEnum
+    video_time_stamps: list["VideoTimeStamps"] = []
 
     class Config:
         from_attributes = True
+
+
+class VideoTimeStamps(BaseModel):
+    id: int
+    title: str
+    time_stamp: int
 
 
 class ContentUpdate(BaseModel):
@@ -201,3 +209,11 @@ class ContentUpdate(BaseModel):
     unit_id: int | None = None
     title: str | None = None
     order: int | None = None
+
+
+class SubjectDetailedFetch(BaseModel):
+    id: int
+    title: str
+    course: BaseCourse
+    completion_time: int
+    units: list[UnitWithContents]

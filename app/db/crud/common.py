@@ -17,11 +17,12 @@ from app.api.v1.schemas.common import (
     UserSubjectCreate,
     UserSubjectFetch,
     UserUnitCreate,
-    UserUnitFetch,
+    UserUnitFetch, UserSubjectUnitStatus, UserUnitStatus,
 )
-from app.api.v1.schemas.courses import SubjectFetch, UserUnitDetail
+from app.api.v1.schemas.courses import SubjectFetch, UserUnitDetail, SubjectDetailedFetch, UnitWithContents, \
+    ContentFetch
 from app.db.models.common import UserContent, UserCourse, UserSubject, UserUnit
-from app.db.models.courses import Contents, Course, Subject, Unit
+from app.db.models.courses import Contents, Course, Subject, Unit, ContentVideoTimeStamp
 from app.db.models.users import User
 from app.services.enum.courses import CompletionStatusEnum
 from app.services.utils.crud_utils import create_model_instance, update_model_instance
@@ -62,7 +63,7 @@ def user_course_fetch(user_id: int, db: Session) -> list[UserCourseFetch]:
     if not user:
         raise NoResultFound(f"User with id {user_id} not found")
     subject_statement = (
-        select(Subject.title)
+        select(Subject.title, Subject.id)
         .join(
             UserSubject,
             (UserSubject.subject_id == Subject.id) & (UserSubject.user_id == user_id),
@@ -310,7 +311,6 @@ def user_course_stats(user_id: int, db: Session) -> UserCourseStats:
         courses_enrolled=stats[0].courses_enrolled,
     )
 
-
 def user_subject_fetch(user_id: int, db: Session) -> list[UserSubjectFetch]:
     user = db.get(User, user_id)
     if not user:
@@ -343,6 +343,25 @@ def user_subject_fetch(user_id: int, db: Session) -> list[UserSubjectFetch]:
         for user_subject, total_units, completed_units in user_subjects
     ]
 
+def user_subject_fetch_by_subject(subject_id: int, user_id: int, db: Session) -> UserSubjectUnitStatus:
+    subject = db.get(Subject, subject_id)
+    if not subject:
+        raise NoResultFound(f"Subject with id {subject_id} not found")
+    total_units = func.count(Unit.id).label("total_units")
+    completed_units = func.count(Unit.id).filter(UserUnit.status == CompletionStatusEnum.COMPLETED)
+    statement = (
+        select(total_units, completed_units)
+        .select_from(Unit)
+        .join(UserUnit, and_(Unit.id == UserUnit.unit_id, UserUnit.user_id == user_id), isouter=True)
+        .where(Unit.subject_id == subject_id)
+        # .group_by(UserUnit.unit_id)
+    )
+    total_units, completed_units = db.exec(statement).first()
+    return UserSubjectUnitStatus(
+        total_units=total_units,
+        completed_units=completed_units,
+    )
+
 
 def user_subject_update(
     user_subject_id: int, user_subject: BaseCommonUpdate, db: Session
@@ -361,26 +380,8 @@ def user_unit_create(user_unit: UserUnitCreate, db: Session):
     try:
         data = user_unit.model_dump()
         user_unit_instance = create_model_instance(UserUnit, data, db)
-        statement = (
-            select(UserUnit)
-            .options(
-                joinedload(UserUnit.unit),
-                selectinload(UserUnit.user).joinedload(User.profile),
-            )
-            .where(
-                UserUnit.user_id == user_unit_instance.user_id,
-                UserUnit.unit_id == user_unit_instance.unit_id,
-            )
-        )
-        instance = db.exec(statement).first()
-        return UserUnitFetch(
-            user_name=instance.user.profile.name if instance.user.profile else None,
-            unit=instance.unit,
-            expected_completion_time=instance.expected_completion_time,
-            started_at=instance.started_at,
-            completed_at=instance.completed_at,
-            status=instance.status,
-        )
+        return user_unit_instance
+
     except IntegrityError:
         raise HTTPException(
             status_code=409, detail="User has already started this unit!"
@@ -417,6 +418,22 @@ def user_unit_fetch(user_id: int, db: Session) -> list[UserUnitFetch]:
         )
         for user_unit, total_contents, completed_contents in user_units
     ]
+
+
+def fetch_user_units_by_subject(subject_id: int, user_id: int, db: Session):
+    subject = db.get(Subject, subject_id)
+    if not subject:
+        raise NoResultFound(f"Subject with id {subject_id} not found")
+    is_started = case((and_(UserUnit.unit_id == Unit.id, UserUnit.user_id == user_id), True), else_=False)
+    statement = (
+        select(Unit.id, UserUnit.status, is_started)
+        .join(UserUnit, and_(Unit.id == UserUnit.unit_id, UserUnit.user_id == user_id), isouter=True)
+        .join(Subject)
+        .where(Unit.subject_id == subject_id)
+        .group_by(Unit.id, UserUnit.user_id, UserUnit.unit_id)
+    )
+    user_units = db.exec(statement).all()
+    return [UserUnitStatus(status=unit_status if unit_status else CompletionStatusEnum.NOT_STARTED, unit_id=unit_id, is_started=is_started) for unit_id, unit_status, is_started in user_units]
 
 
 def user_unit_update(user_unit_id: int, user_unit: BaseCommonUpdate, db: Session):

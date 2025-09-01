@@ -18,10 +18,10 @@ from app.api.v1.schemas.courses import (
     SubjectFetch,
     UnitCreate,
     UnitFetch,
-    UnitUpdate,
+    UnitUpdate, SubjectDetailedFetch, UnitWithContents, VideoTimeStamps,
 )
 from app.api.v1.schemas.users import ProfileSchema
-from app.db.models.common import UserCourse, UserSubject
+from app.db.models.common import UserCourse, UserSubject, UserUnit
 from app.db.models.courses import (
     Category,
     CategoryCourseLink,
@@ -273,9 +273,44 @@ def fetch_subjects_minimal(
     return subjects_data
 
 
-def fetch_subjects_by_id(subject_id: int, db: Session) -> list[BaseSubjectFetch]:
-    pass
+def subject_fetch_by_id(subject_id: int, db: Session):
+    subject = db.get(Subject, subject_id)
+    if not subject:
+        raise NoResultFound(f"Subject with pk {subject_id} not found")
 
+    statement = (
+        select(Subject)
+        .options(selectinload(Subject.course), selectinload(Subject.units).selectinload(Unit.contents).selectinload(Contents.video_time_stamps))
+    )
+    subject_instance = db.exec(statement).first()
+    return SubjectDetailedFetch(
+        id=subject_instance.id,
+        title=subject_instance.title,
+        course=BaseCourse(
+            id=subject_instance.course.id,
+            title=subject_instance.course.title
+        ),
+        units=[UnitWithContents(
+            id=unit.id,
+            title=unit.title,
+            completion_time=unit.completion_time,
+            contents=[ContentFetch(
+                id=content.id,
+                title=content.title,
+                completion_time=content.completion_time,
+                order=content.order,
+                content_type=content.content_type,
+                status=content.status,
+                file_url=format_file_path(content.file_url),
+                video_time_stamps=[VideoTimeStamps(
+                    id=stamp.id,
+                    title=stamp.title,
+                    time_stamp=stamp.time_stamp,
+                ) for stamp in content.video_time_stamps],
+            ) for content in unit.contents]
+        ) for unit in subject_instance.units],
+        completion_time=subject_instance.completion_time
+    )
 
 
 def unit_create(unit: UnitCreate, db: Session) -> UnitFetch:

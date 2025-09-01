@@ -31,7 +31,7 @@ from app.db.crud.common import (
     user_subject_update,
     user_unit_create,
     user_unit_fetch,
-    user_unit_update,
+    user_unit_update, user_subject_fetch_by_subject, fetch_user_units_by_subject,
 )
 from app.db.models.users import User
 from app.db.session.session import get_db
@@ -121,9 +121,10 @@ def update_user_course(
 
 @common_router.post("/user-subject/create/", response_model=UserSubjectFetch)
 def create_user_subject(
-    user_subject: UserSubjectCreate, db: Annotated[Session, Depends(get_db)]
+    user_subject: UserSubjectCreate, db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(get_current_user)]
 ):
     try:
+        user_subject.user_id = user.id
         user_subject_data = user_subject_create(user_subject, db)
         return user_subject_data
     except Exception as error:
@@ -141,6 +142,16 @@ def fetch_user_subject(user_id: int, db: Annotated[Session, Depends(get_db)]):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@common_router.get("/user-subject/{subject_id}/status/")
+def fetch_user_subject_status(subject_id: int, db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(get_current_user)]):
+    try:
+        return user_subject_fetch_by_subject(subject_id, user.id, db)
+    except Exception as error:
+        raise HTTPException(status_code=500, detail={
+            "error_type": error.__class__.__name__,
+            "error_message": str(error),
+        })
+
 @common_router.patch("/user-subject/update/{user_subject_id}/")
 def update_user_subject(
     user_subject_id: int,
@@ -156,9 +167,10 @@ def update_user_subject(
 
 @common_router.post("/user-unit/create/")
 def create_user_unit(
-    user_unit: UserUnitCreate, db: Annotated[Session, Depends(get_db)]
+    user_unit: UserUnitCreate, db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(get_current_user)]
 ):
     try:
+        user_unit.user_id = user.id
         user_unit_instance = user_unit_create(user_unit, db)
         return user_unit_instance
     except Exception as error:
@@ -188,6 +200,16 @@ def update_user_unit(
     except Exception as error:
         raise HTTPException(status_code=500, detail=str(error))
 
+
+@common_router.get("/user-unit/{subject_id}/status/")
+def fetch_user_units_status(subject_id: int, db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(get_current_user)]):
+    try:
+        return fetch_user_units_by_subject(subject_id, user.id, db)
+    except Exception as error:
+        raise HTTPException(status_code=500, detail={
+            "error_type": error.__class__.__name__,
+            "error_message": str(error),
+        })
 
 @common_router.post("/user-content/create/", response_model=UserContentFetch)
 def create_user_content(

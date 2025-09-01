@@ -46,7 +46,7 @@ from app.db.crud.courses import (
     list_minimal_courses,
     subject_create,
     unit_create,
-    unit_update,
+    unit_update, subject_fetch_by_id,
 )
 from app.db.session.session import get_db
 
@@ -191,6 +191,22 @@ def list_subjects_by_course(course_id: int, db: Annotated[Session, Depends(get_d
         return fetch_subjects_by_courses(db, course_id)
     except Exception as error:
         raise HTTPException(status_code=500, detail=str(error))
+
+
+@course_router.get("/subject/get_by_id/{subject_id}/")
+def fetch_subject_by_id(subject_id: int, db: Annotated[Session, Depends(get_db)]):
+    try:
+        return subject_fetch_by_id(subject_id, db)
+    except ValidationError as ve:
+        return JSONResponse(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            content=jsonable_encoder({"errors": ve.errors()}),
+        )
+    except Exception as error:
+        raise HTTPException(status_code=500, detail={
+            "error_type": error.__class__.__name__,
+            "error_message": str(error),
+        })
 
 
 @course_router.get(
