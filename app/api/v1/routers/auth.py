@@ -16,6 +16,7 @@ from app.services.auth.core import (
     create_tokens,
     get_current_user,
 )
+from app.services.auth.permissions_mixins import IsAdmin
 
 
 auth_router = APIRouter(prefix="/auth", tags=["Authentication"])
@@ -107,7 +108,7 @@ def get_authenticate_user(
 @auth_router.get(
     "/admin/me/",
     response_model=UserFetchSchema,
-    dependencies=[Depends(get_current_user)],
+    dependencies=[Depends(IsAdmin())],
 )
 def get_admin_authenticated_user(
     user: Annotated[User, Depends(get_current_user)],

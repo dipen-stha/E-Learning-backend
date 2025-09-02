@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field
 
-from app.api.v1.schemas.users import ProfileSchema, MinimalUserFetch
+from app.api.v1.schemas.users import ProfileSchema
 from app.services.enum.courses import ContentTypeEnum, StatusEnum
 
 

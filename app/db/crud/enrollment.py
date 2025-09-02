@@ -1,9 +1,8 @@
 from fastapi import HTTPException
-from sqlalchemy import Boolean, Integer, func, text
+from sqlalchemy import func
 from sqlalchemy.exc import NoResultFound
 from sqlalchemy.orm import selectinload
-from sqlmodel import Session, and_, asc, case, cast, select
-from sqlmodel.sql import expression
+from sqlmodel import Session, and_, asc, select
 
 from app.api.v1.schemas.courses import CourseFetch, SubjectFetch, UserUnitDetail
 from app.api.v1.schemas.enrollment import (
@@ -81,7 +80,8 @@ def fetch_user_enrollments(user_id: int, db: Session):
             CourseEnrollment,
             # subject_statement.c.id, subject_statement.c.title,
             func.count(Subject.id).label("subject_counts"),
-            func.count(UserSubject.subject_id).filter(UserSubject.status == CompletionStatusEnum.COMPLETED)
+            func.count(UserSubject.subject_id)
+            .filter(UserSubject.status == CompletionStatusEnum.COMPLETED)
             .label("completed_counts"),
         )
         .select_from(CourseEnrollment)
@@ -186,7 +186,7 @@ def fetch_user_enrollments_by_course(user_id: int, course_id: int, db: Session):
                     UserUnitDetail(
                         id=unit.id,
                         title=unit.title,
-                        is_completed=subject_details.get(subject.id).is_completed,
+                        # is_completed=subject_details.get(subject.id).is_completed,
                     )
                     for unit in subject.units
                 ],

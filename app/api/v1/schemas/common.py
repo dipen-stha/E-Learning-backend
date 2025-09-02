@@ -119,10 +119,17 @@ class UserUnitFetch(BaseCommonFetch):
         from_attributes = True
 
 
-class UserUnitStatusUpdate(BaseModel):
+class BaseCommonStatusUpdate(BaseModel):
     status: CompletionStatusEnum
-    unit_id: int
     user_id: int | None = None
+
+
+class UserUnitStatusUpdate(BaseCommonStatusUpdate):
+    unit_id: int
+
+
+class UserContentStatusUpdate(BaseCommonStatusUpdate):
+    content_id: int
 
 
 class UserSubjectCreate(BaseCommonSchema):
@@ -164,3 +171,6 @@ class UserUnitStatus(BaseModel):
 class UserContentStatus(BaseModel):
     content_id: int
     status: CompletionStatusEnum = CompletionStatusEnum.NOT_STARTED
+
+    class Config:
+        from_attributes = True
