@@ -32,6 +32,8 @@ class UserContent(SQLModel, table=True):
     started_at: datetime = Field(default_factory=datetime.now)
     completed_at: datetime = Field(nullable=True)
 
+    content: "Contents" = Relationship(back_populates="user_content_links")
+
     __tablename__ = "user_contents"
 
 
@@ -44,6 +46,8 @@ class UserUnit(SQLModel, table=True):
     )
     started_at: datetime = Field(default_factory=datetime.now)
     completed_at: datetime = Field(nullable=True)
+
+    unit: "Unit" = Relationship(back_populates="user_unit_links")
 
     __tablename__ = "user_units"
 
