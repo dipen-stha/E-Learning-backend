@@ -27,7 +27,7 @@ from app.api.v1.schemas.courses import (
     SubjectFetch,
     UnitCreate,
     UnitFetch,
-    UnitUpdate,
+    UnitUpdate, CourseUpdate,
 )
 from app.db.crud.courses import (
     content_create,
@@ -149,14 +149,16 @@ async def create_course(
         raise HTTPException(status_code=500, detail=str(error))
 
 
-@course_router.patch("/update/{course_id}/", response_model=BaseCourse)
+@course_router.patch("/{course_id}/update/", response_model=BaseCourse)
 async def update_course(
     course_id: int,
     db: Annotated[Session, Depends(get_db)],
+    course: str = Form(...),
     file: UploadFile = File(...),
 ):
     try:
-        return await course_update(course_id, db, file)
+        course_data = CourseUpdate(**json.loads(course))
+        return await course_update(course_id, course_data, db, file)
     except Exception as error:
         raise HTTPException(
             status_code=500,

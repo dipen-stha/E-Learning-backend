@@ -2,7 +2,7 @@ from fastapi import UploadFile
 from sqlalchemy import exists
 from sqlalchemy.exc import NoResultFound
 from sqlalchemy.orm import joinedload, selectinload
-from sqlmodel import Session, case, desc, distinct, func, select
+from sqlmodel import Session, case, desc, distinct, func, select, delete
 
 from app.api.v1.schemas.courses import (
     BaseCourse,
@@ -23,7 +23,7 @@ from app.api.v1.schemas.courses import (
     UnitFetch,
     UnitUpdate,
     UnitWithContents,
-    VideoTimeStamps,
+    VideoTimeStamps, CourseUpdate,
 )
 from app.api.v1.schemas.users import ProfileSchema
 from app.db.models.common import UserSubject
@@ -200,21 +200,32 @@ async def course_create(
     )
 
 
-async def course_update(course_id: int, db: Session, file: UploadFile) -> BaseCourse:
-    data = {}
-    image_path = await image_save(file)
-    data["image_url"] = str(image_path)
-    course_instance = db.get(Course, course_id)
-    if not course_instance:
-        raise NoResultFound("Course not found")
-    updated_course_instance = update_model_instance(course_instance, data)
-    db.add(updated_course_instance)
-    db.commit()
-    db.refresh(updated_course_instance)
-    return BaseCourse(
-        id=updated_course_instance.id,
-        title=updated_course_instance.title,
-    )
+async def course_update(course_id: int, course_data: CourseUpdate, db: Session, file: UploadFile) -> BaseCourse:
+    try:
+        data = {}
+        course_instance = db.get(Course, course_id)
+        if not course_instance:
+            raise NoResultFound("Course not found")
+        categories_id = course_data.pop("categories_id")
+        image_path = await image_save(file)
+        data["image_url"] = str(image_path)
+        updated_course_instance = update_model_instance(course_instance, data)
+        db.add(updated_course_instance)
+
+        if categories_id:
+            db.exec(delete(CategoryCourseLink).where(CategoryCourseLink.course_id == course_id))
+            new_categories_links = [CategoryCourseLink(category_id=cat_id, course_id=course_id) for cat_id in categories_id]
+            db.add_all(new_categories_links)
+
+        db.commit()
+        db.refresh(updated_course_instance)
+        return BaseCourse(
+            id=updated_course_instance.id,
+            title=updated_course_instance.title,
+        )
+    except Exception as e:
+        db.rollback()
+        raise e
 
 
 def course_fetch_by_id(course_id: int, db: Session):
