@@ -4,6 +4,7 @@ import humanize
 
 from fastapi import UploadFile
 from sqlalchemy import extract
+from sqlalchemy.exc import NoResultFound
 from sqlalchemy.orm import joinedload, selectinload
 from sqlmodel import Session, func, select
 
@@ -14,12 +15,15 @@ from app.api.v1.schemas.users import (
     UserCreateSchema,
     UserFetchSchema,
     UserStats,
+    UserUpdateSchema,
 )
 from app.db.models.common import UserCourse
+from app.db.models.enrollment import CourseEnrollment
 from app.db.models.users import Profile, User
 from app.services.auth.hash import get_password_hash
 from app.services.enum.courses import CompletionStatusEnum
 from app.services.enum.users import UserRole
+from app.services.utils.crud_utils import update_model_instance, validate_unique_field
 from app.services.utils.files import format_file_path, image_save
 
 
@@ -78,12 +82,81 @@ def get_user_list_by_role(
     return [UserFetchSchema.from_orm(user) for user in user_instances]
 
 
+async def update_user(
+    user_id: int,
+    user_data: UserUpdateSchema,
+    db: Session,
+    image: UploadFile | None = None,
+):
+    try:
+        user_instance = db.get(User, user_id)
+        if not user_instance:
+            raise NoResultFound(f"User with pk {user_id} not found")
+        profile_instance = db.exec(
+            select(Profile).where(Profile.user_id == user_id)
+        ).first()
+        username = user_data.username
+        email = user_data.email
+        validate_unique_field(User, "username", username, db, user_instance)
+        validate_unique_field(User, "email", email, db, user_instance)
+        user_fields = ["username", "email", "password", "is_active"]
+        profile_fields = ["name", "gender", "dob", "avatar"]
+        update_data = user_data.model_dump(exclude_none=True)
+        user_data_update = {
+            key: value for key, value in update_data.items() if key in user_fields
+        }
+        password = user_data_update.pop("password")
+        if password:
+            user_data_update["password"] = get_password_hash(password)
+        profile_data = {
+            key: value for key, value in update_data.items() if key in profile_fields
+        }
+        if image:
+            user_image = str(await image_save(image))
+            if user_image:
+                profile_data["avatar"] = user_image
+        updated_user_instance = update_model_instance(user_instance, user_data_update)
+        updated_profile_instance = update_model_instance(profile_instance, profile_data)
+        db.add(updated_user_instance)
+        db.commit()
+        db.refresh(updated_user_instance)
+        return updated_user_instance
+    except Exception as e:
+        db.rollback()
+        raise e
+
+
+def fetch_user_by_id(user_id: int, db: Session) -> UserFetchSchema | None:
+    user, profile = db.exec(
+        select(User, Profile)
+        .join(Profile, Profile.user_id == User.id)
+        .where(User.id == user_id)
+    ).first()
+    if not user:
+        raise NoResultFound(f"User with pk {user_id} not found")
+    return UserFetchSchema(
+        id=user.id,
+        username=user.username,
+        email=user.email,
+        is_active=user.is_active,
+        profile=ProfileSchema(
+            name=profile.name,
+            dob=profile.dob,
+            gender=profile.gender,
+            avatar=format_file_path(profile.avatar),
+            role=profile.role,
+        ),
+    )
+
+
 def get_students_list(db: Session) -> list[StudentFetchSchema]:
 
     sub_query = (
         select(
-            UserCourse.user_id,
-            func.coalesce(func.count(UserCourse.course_id), 0).label("total_courses"),
+            CourseEnrollment.user_id,
+            func.coalesce(func.count(CourseEnrollment.course_id), 0).label(
+                "total_courses"
+            ),
             func.coalesce(
                 func.count(UserCourse.course_id).filter(
                     UserCourse.status == CompletionStatusEnum.COMPLETED
@@ -91,7 +164,7 @@ def get_students_list(db: Session) -> list[StudentFetchSchema]:
                 0,
             ).label("completed_courses"),
         )
-        .group_by(UserCourse.user_id)
+        .group_by(CourseEnrollment.user_id, UserCourse.course_id)
         .subquery()
     )
     statement = (
@@ -159,14 +232,22 @@ def get_user_stats(role: UserRole, db: Session):
         suspended_count=suspended_count,
         monthly_creation=monthly_creation,
         percent_total_count=(
-            total_count / (last_month_count if last_month_count else total_count)
-        )
-        * 100,
-        percent_active_count=(active_count / total_count) * 100,
-        percent_monthly_creation=(
-            monthly_creation
-            / (last_month_count if last_month_count else monthly_creation)
-        )
-        * 100,
-        percent_suspended_count=(suspended_count / total_count) * 100,
+            round(
+                (total_count / (last_month_count if last_month_count else total_count))
+                * 100,
+                2,
+            )
+            if total_count != last_month_count
+            else 0
+        ),
+        percent_active_count=round((active_count / total_count) * 100, 2),
+        percent_monthly_creation=round(
+            (
+                monthly_creation
+                / (last_month_count if last_month_count else monthly_creation)
+            )
+            * 100,
+            2,
+        ),
+        percent_suspended_count=round((suspended_count / total_count) * 100, 2),
     )

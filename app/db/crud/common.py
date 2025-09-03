@@ -2,28 +2,34 @@ from datetime import datetime
 
 from fastapi import HTTPException
 from sqlalchemy.exc import IntegrityError, NoResultFound
-from sqlalchemy.orm import joinedload, selectinload, aliased, contains_eager
+from sqlalchemy.orm import contains_eager, joinedload, selectinload
 from sqlalchemy.types import Integer
 from sqlmodel import Session, and_, asc, case, func, select
 from sqlmodel.sql import expression
 
 from app.api.v1.schemas.common import (
+    BaseCommonFetch,
     BaseCommonUpdate,
+    UpcomingCourseSubjects,
     UserContentCreate,
     UserContentFetch,
+    UserContentStatus,
+    UserContentStatusUpdate,
     UserCourseCreate,
     UserCourseFetch,
     UserCourseStats,
     UserSubjectCreate,
     UserSubjectFetch,
+    UserSubjectStatus,
+    UserSubjectUnitStatus,
     UserUnitCreate,
-    UserUnitFetch, UserSubjectUnitStatus, UserUnitStatus, BaseCommonFetch, UserSubjectStatus, UpcomingCourseSubjects,
+    UserUnitFetch,
+    UserUnitStatus,
     UserUnitStatusUpdate,
 )
-from app.api.v1.schemas.courses import SubjectFetch, UserUnitDetail, SubjectDetailedFetch, UnitWithContents, \
-    ContentFetch, BaseSubjectFetch
+from app.api.v1.schemas.courses import BaseSubjectFetch, SubjectFetch, UserUnitDetail
 from app.db.models.common import UserContent, UserCourse, UserSubject, UserUnit
-from app.db.models.courses import Contents, Course, Subject, Unit, ContentVideoTimeStamp
+from app.db.models.courses import Contents, Course, Subject, Unit
 from app.db.models.enrollment import CourseEnrollment
 from app.db.models.users import User
 from app.services.enum.courses import CompletionStatusEnum
@@ -119,13 +125,13 @@ def user_course_fetch(user_id: int, db: Session) -> list[UserCourseFetch]:
 
 
 def get_subject_detail_with_unit_counts(course_id: int, user_id: int, db: Session):
-    total_unit_counts = func.count(Unit.id).label("total_units")
+    total_unit_counts = func.count(Unit.id.distinct()).label("total_units")
     completed_unit_counts = func.count(
         case((UserUnit.status == CompletionStatusEnum.COMPLETED, 1), else_=None)
     ).label("completed_units")
-    unit_completed_statement = case(
-        (UserUnit.status == CompletionStatusEnum.COMPLETED, True), else_=False
-    ).label("is_completed")
+    # unit_completed_statement = case(
+    #     (UserUnit.status == CompletionStatusEnum.COMPLETED, True), else_=False
+    # ).label("is_completed")
 
     statement = (
         select(
@@ -133,14 +139,14 @@ def get_subject_detail_with_unit_counts(course_id: int, user_id: int, db: Sessio
             Subject.title,
             total_unit_counts,
             completed_unit_counts,
-            unit_completed_statement,
+            # unit_completed_statement,
         )
         .join(Unit, Unit.subject_id == Subject.id)
         .outerjoin(
             UserUnit, (UserUnit.user_id == user_id) & (UserUnit.unit_id == Unit.id)
         )
         .where(Subject.course_id == course_id)
-        .group_by(Subject.id, Subject.title, UserUnit)
+        .group_by(Subject.id, Subject.title)
     )
     return db.exec(statement).all()
 
@@ -150,15 +156,19 @@ def fetch_subject_status_by_course_id(course_id: int, user_id: int, db: Session)
     if not course:
         raise NoResultFound(f"Course with pk {course_id} not found")
     statement = (
-        select(
-            Subject.id,
-            UserSubject.status
+        select(Subject.id, UserSubject.status)
+        .join(
+            UserSubject,
+            and_(UserSubject.subject_id == Subject.id, UserSubject.user_id == user_id),
+            isouter=True,
         )
-        .join(UserSubject, and_(UserSubject.subject_id == Subject.id, UserSubject.user_id == user_id), isouter=True)
         .where(Subject.course_id == course_id)
     )
     subject_statuses = db.exec(statement).all()
-    return [UserSubjectStatus(id=subject_id, status=user_subject_status) for subject_id, user_subject_status in subject_statuses]
+    return [
+        UserSubjectStatus(id=subject_id, status=user_subject_status)
+        for subject_id, user_subject_status in subject_statuses
+    ]
 
 
 def user_course_fetch_by_id(
@@ -239,7 +249,7 @@ def user_course_fetch_by_id(
                     UserUnitDetail(
                         id=unit.id,
                         title=unit.title,
-                        is_completed=subject_details.get(subject.id).is_completed,
+                        # is_completed=subject_details.get(subject.id).is_completed,
                     )
                     for unit in subject.units
                 ],
@@ -299,7 +309,9 @@ def user_subject_create(user_subject: UserSubjectCreate, db: Session):
 
 
 def fetch_user_upcoming_subjects(db: Session, user_id: int | None = None):
-    user_enrolled_courses = db.exec(select(CourseEnrollment).where(CourseEnrollment.user_id == user_id)).all()
+    user_enrolled_courses = db.exec(
+        select(CourseEnrollment).where(CourseEnrollment.user_id == user_id)
+    ).all()
 
     next_subjects_by_course = {}
 
@@ -311,15 +323,19 @@ def fetch_user_upcoming_subjects(db: Session, user_id: int | None = None):
             .where(
                 UserSubject.user_id == user_id,
                 Subject.course_id == course_id,
-                UserSubject.status == CompletionStatusEnum.COMPLETED
-            ).order_by(Subject.order)
+                UserSubject.status == CompletionStatusEnum.COMPLETED,
+            )
+            .order_by(Subject.order)
             .limit(1)
         ).first()
         next_subject = None
         if last_completed_subject:
             next_subject = db.exec(
                 select(Subject)
-                .where(Subject.order > last_completed_subject.order, Subject.course_id == course_id)
+                .where(
+                    Subject.order > last_completed_subject.order,
+                    Subject.course_id == course_id,
+                )
                 .order_by(asc(Subject.order))
                 .limit(1)
             ).first()
@@ -331,9 +347,13 @@ def fetch_user_upcoming_subjects(db: Session, user_id: int | None = None):
                 .limit(1)
             ).first()
         next_subjects_by_course[course_id] = next_subject
-    return [UpcomingCourseSubjects(
-        course_id=course_id, subject=BaseSubjectFetch(id=value.id, title=value.title)
-    ) for course_id, value in next_subjects_by_course.items()]
+    return [
+        UpcomingCourseSubjects(
+            course_id=course_id,
+            subject=BaseSubjectFetch(id=value.id, title=value.title),
+        )
+        for course_id, value in next_subjects_by_course.items()
+    ]
 
 
 def user_course_stats(user_id: int, db: Session) -> UserCourseStats:
@@ -353,6 +373,7 @@ def user_course_stats(user_id: int, db: Session) -> UserCourseStats:
         completed_courses=stats[0].completed_courses,
         courses_enrolled=stats[0].courses_enrolled,
     )
+
 
 def user_subject_fetch(user_id: int, db: Session) -> list[UserSubjectFetch]:
     user = db.get(User, user_id)
@@ -386,16 +407,25 @@ def user_subject_fetch(user_id: int, db: Session) -> list[UserSubjectFetch]:
         for user_subject, total_units, completed_units in user_subjects
     ]
 
-def user_subject_fetch_by_subject(subject_id: int, user_id: int, db: Session) -> UserSubjectUnitStatus:
+
+def user_subject_fetch_by_subject(
+    subject_id: int, user_id: int, db: Session
+) -> UserSubjectUnitStatus:
     subject = db.get(Subject, subject_id)
     if not subject:
         raise NoResultFound(f"Subject with id {subject_id} not found")
     total_units = func.count(Unit.id).label("total_units")
-    completed_units = func.count(Unit.id).filter(UserUnit.status == CompletionStatusEnum.COMPLETED)
+    completed_units = func.count(Unit.id).filter(
+        UserUnit.status == CompletionStatusEnum.COMPLETED
+    )
     statement = (
         select(total_units, completed_units)
         .select_from(Unit)
-        .join(UserUnit, and_(Unit.id == UserUnit.unit_id, UserUnit.user_id == user_id), isouter=True)
+        .join(
+            UserUnit,
+            and_(Unit.id == UserUnit.unit_id, UserUnit.user_id == user_id),
+            isouter=True,
+        )
         .where(Unit.subject_id == subject_id)
         # .group_by(UserUnit.unit_id)
     )
@@ -403,6 +433,7 @@ def user_subject_fetch_by_subject(subject_id: int, user_id: int, db: Session) ->
     return UserSubjectUnitStatus(
         total_units=total_units,
         completed_units=completed_units,
+        completion_percent=round(completed_units / total_units * 100, 2),
     )
 
 
@@ -470,24 +501,55 @@ def fetch_user_units_by_subject(subject_id: int, user_id: int, db: Session):
     statement = (
         select(Unit)
         .join(Subject)
-        .outerjoin(UserUnit, and_(Unit.id == UserUnit.unit_id, UserUnit.user_id == user_id))
-        .options(selectinload(Unit.contents).selectinload(Contents.user_content_links), contains_eager(Unit.user_unit_links))
+        .outerjoin(
+            UserUnit, and_(Unit.id == UserUnit.unit_id, UserUnit.user_id == user_id)
+        )
+        .options(
+            contains_eager(Unit.user_unit_links),
+            selectinload(Unit.contents).selectinload(Contents.user_content_links),
+        )
         .where(Unit.subject_id == subject_id)
     )
-    user_units = db.exec(statement).all()
-    import ipdb;ipdb.set_trace()
-    return [UserUnitStatus(status=unit_status if unit_status else CompletionStatusEnum.NOT_STARTED, unit_id=unit_id, ) for unit_id, unit_status, is_started in user_units]
+    user_units = db.exec(statement).unique().all()
+    return [
+        UserUnitStatus(
+            unit_id=unit.id,
+            status=(
+                unit.user_unit_links[0].status
+                if unit.user_unit_links
+                else CompletionStatusEnum.NOT_STARTED
+            ),
+            contents=[
+                UserContentStatus(
+                    content_id=content.id,
+                    status=(
+                        content.user_content_links[0].status
+                        if content.user_content_links
+                        else CompletionStatusEnum.NOT_STARTED
+                    ),
+                )
+                for content in unit.contents
+            ],
+        )
+        for unit in user_units
+    ]
 
 
-def user_unit_status_update(user_unit: UserUnitStatusUpdate,  db:Session):
+def user_unit_status_update(user_unit: UserUnitStatusUpdate, db: Session):
     unit = db.get(Unit, user_unit.unit_id)
     if not unit:
         raise NoResultFound(f"Unit with id {user_unit.unit_id} not found")
-    user_unit_instance = db.exec(select(UserUnit).where(UserUnit.user_id == user_unit.user_id, UserUnit.unit_id == user_unit.unit_id)).first()
+    user_unit_instance = db.exec(
+        select(UserUnit).where(
+            UserUnit.user_id == user_unit.user_id, UserUnit.unit_id == user_unit.unit_id
+        )
+    ).first()
     if not user_unit_instance:
-        raise NoResultFound(f"Not records of user for this unit found")
+        raise NoResultFound("Not records of user for this unit found")
     if user_unit_instance == CompletionStatusEnum.COMPLETED:
-        raise HTTPException(status_code=400, detail="User has already completed this unit!")
+        raise HTTPException(
+            status_code=400, detail="User has already completed this unit!"
+        )
     data = user_unit.model_dump(exclude_none=True)
     updated_user_unit = update_model_instance(user_unit_instance, data)
     db.add(updated_user_unit)
@@ -512,32 +574,78 @@ def user_unit_update(user_unit_id: int, user_unit: BaseCommonUpdate, db: Session
 
 def user_content_create(user_content: UserContentCreate, db: Session):
     try:
+        content_id = user_content.content_id
+        content_instance = db.get(Contents, content_id)
+        if not content_instance:
+            raise NoResultFound(f"Content with id {content_id} not found")
+        user_unit_instance = db.exec(
+            select(UserUnit).where(
+                UserUnit.user_id == user_content.user_id,
+                UserUnit.unit_id == content_instance.unit_id,
+            )
+        ).first()
         data = user_content.model_dump()
+        if not user_unit_instance:
+            data.pop("content_id")
+            data["unit_id"] = content_instance.unit_id
+            user_unit = UserUnitCreate(**data)
+            user_unit_create(user_unit, db)
         user_content_instance = create_model_instance(UserContent, data, db)
-        statement = (
-            select(UserContent)
-            .options(
-                joinedload(UserContent.content),
-                selectinload(UserContent.user).joinedload(User.profile),
-            )
-            .where(
-                UserContent.user_id == user_content_instance.user_id,
-                UserContent.content_id == user_content_instance.content_id,
-            )
-        )
-        instance = db.exec(statement).first()
-        return UserContentFetch(
-            user_name=instance.user.profile.name if instance.user.profile else None,
-            content=instance.content,
-            expected_completion_time=instance.expected_completion_time,
-            started_at=instance.started_at,
-            status=instance.status,
-            completed_at=instance.completed_at,
-        )
+        return user_content_instance
     except IntegrityError:
         raise HTTPException(
             status_code=409, detail="User has already started this content!"
         )
+
+
+def user_content_status_update(user_content_data: UserContentStatusUpdate, db: Session):
+    try:
+        content = db.get(Contents, user_content_data.content_id)
+        if not content:
+            raise NoResultFound(
+                f"Content with id {user_content_data.content_id} not found"
+            )
+        user_content_instance = db.exec(
+            select(UserContent).where(
+                UserContent.user_id == user_content_data.user_id,
+                UserContent.content_id == user_content_data.content_id,
+            )
+        ).first()
+        if not user_content_instance:
+            raise NoResultFound("User has not started this content")
+        if user_content_instance.status == CompletionStatusEnum.COMPLETED:
+            raise HTTPException(
+                status_code=400, detail="User has already completed this content!"
+            )
+        data = user_content_data.model_dump(exclude_none=True)
+        updated_user_content_instance = update_model_instance(
+            user_content_instance, data
+        )
+        db.add(updated_user_content_instance)
+        user_unit_instance = db.exec(
+            select(UserUnit).where(
+                UserUnit.user_id == user_content_data.user_id,
+                UserUnit.unit_id == content.unit_id,
+            )
+        ).first()
+        unit_contents = db.exec(
+            select(UserContent.status).where(
+                UserContent.user_id == user_content_data.user_id,
+                UserContent.content_id == user_content_data.content_id,
+            )
+        ).all()
+        is_all_contents_completed = all(
+            item == CompletionStatusEnum.COMPLETED for item in unit_contents
+        )
+        if is_all_contents_completed:
+            user_unit_instance.status = CompletionStatusEnum.COMPLETED
+            db.add(user_unit_instance)
+        db.commit()
+        db.refresh(updated_user_content_instance)
+        return updated_user_content_instance
+    except Exception as e:
+        db.rollback()
+        raise e
 
 
 def user_content_fetch(user_id: int, db: Session) -> list[UserContentFetch]:

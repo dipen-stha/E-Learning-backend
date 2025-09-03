@@ -3,7 +3,6 @@ from datetime import date
 from pydantic import BaseModel, model_validator
 from pydantic_core import ValidationError
 
-from app.db.models.users import User
 from app.services.enum.users import UserGender
 
 
@@ -14,6 +13,23 @@ class UserCreateSchema(BaseModel):
     confirm_password: str | None = None
     name: str
     gender: UserGender
+    dob: date | None = None
+    is_active: bool | None = None
+
+    @model_validator(mode="after")
+    def validate_passwords(self):
+        if self.confirm_password and self.password != self.confirm_password:
+            raise ValidationError("Passwords don't match")
+        return self
+
+
+class UserUpdateSchema(BaseModel):
+    email: str | None = None
+    username: str | None = None
+    password: str | None = None
+    confirm_password: str | None = None
+    name: str | None = None
+    gender: UserGender | None = None
     dob: date | None = None
     is_active: bool | None = None
 
@@ -40,15 +56,7 @@ class UserFetchSchema(BaseModel):
     profile: ProfileSchema | None
     email: str
     username: str
-
-    @staticmethod
-    def from_orm(user: User) -> "UserFetchSchema":
-        return UserFetchSchema(
-            id=user.id,
-            profile=ProfileSchema.model_validate(user.profile),
-            email=user.email,
-            username=user.username,
-        )
+    is_active: bool | None = None
 
     class Config:
         from_attributes = True

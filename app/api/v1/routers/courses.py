@@ -22,11 +22,12 @@ from app.api.v1.schemas.courses import (
     CourseCreate,
     CourseDetailFetch,
     CourseFetch,
+    LatestCourseFetch,
     SubjectCreate,
     SubjectFetch,
     UnitCreate,
     UnitFetch,
-    UnitUpdate, LatestCourseFetch,
+    UnitUpdate,
 )
 from app.db.crud.courses import (
     content_create,
@@ -37,6 +38,7 @@ from app.db.crud.courses import (
     course_update,
     fetch_all_units,
     fetch_contents,
+    fetch_latest_courses,
     fetch_minimal_units,
     fetch_subjects_by_courses,
     fetch_subjects_minimal,
@@ -45,12 +47,14 @@ from app.db.crud.courses import (
     list_all_courses,
     list_minimal_courses,
     subject_create,
+    subject_fetch_by_id,
     unit_create,
-    unit_update, subject_fetch_by_id, fetch_latest_courses,
+    unit_update,
 )
 from app.db.models.users import User
 from app.db.session.session import get_db
 from app.services.auth.core import get_current_user
+
 
 course_router = APIRouter(prefix="/courses", tags=["Courses"])
 
@@ -72,7 +76,10 @@ def get_categories(db: Annotated[Session, Depends(get_db)]):
 
 
 @course_router.get("/get/latest-courses/", response_model=list[LatestCourseFetch])
-def get_latest_courses(db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(get_current_user)]):
+def get_latest_courses(
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(get_current_user)],
+):
     try:
         return fetch_latest_courses(db, user.id)
     except ValidationError as error:
@@ -88,6 +95,7 @@ def get_latest_courses(db: Annotated[Session, Depends(get_db)], user: Annotated[
                 "error_message": str(error),
             },
         )
+
 
 @course_router.get("/get/all/", response_model=list[CourseDetailFetch])
 def get_all_courses(db: Annotated[Session, Depends(get_db)]):
@@ -222,10 +230,13 @@ def fetch_subject_by_id(subject_id: int, db: Annotated[Session, Depends(get_db)]
             content=jsonable_encoder({"errors": ve.errors()}),
         )
     except Exception as error:
-        raise HTTPException(status_code=500, detail={
-            "error_type": error.__class__.__name__,
-            "error_message": str(error),
-        })
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error_type": error.__class__.__name__,
+                "error_message": str(error),
+            },
+        )
 
 
 @course_router.get(

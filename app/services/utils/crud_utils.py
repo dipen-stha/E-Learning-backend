@@ -1,5 +1,5 @@
 from sqlalchemy.exc import IntegrityError
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from app.db.session.session import get_db
 
@@ -24,4 +24,16 @@ def create_model_instance(model: any, data: dict, db: Session):
         return model_instance
     except IntegrityError:
         db.rollback()
-        raise
+        raise IntegrityError
+
+
+def validate_unique_field(
+    model: any, field: str, data: any, db: Session, instance: any
+):
+    try:
+        statement = select(model).where(getattr(model, field) == data)
+        model_instance = db.exec(statement).first()
+        if model_instance and (instance.id is None or model_instance.id != instance.id):
+            raise IntegrityError(f"{model} with this {field} already exists")
+    except Exception as e:
+        raise e
