@@ -1,7 +1,7 @@
 from pydantic import BaseModel, Field
 
 from app.api.v1.schemas.users import ProfileSchema
-from app.services.enum.courses import ContentTypeEnum, StatusEnum
+from app.services.enum.courses import ContentTypeEnum, StatusEnum, CompletionStatusEnum
 
 
 class Base(BaseModel):
@@ -19,6 +19,11 @@ class CourseUpdate(BaseModel):
     title: str | None = None
     categories_id: list[int] | None = None
     instructor_id: int | None = None
+    completion_time: int | None = None
+    price: float | None = None
+    status: StatusEnum
+    requirements: str | None = None
+    objectives: str | None = None
 
 
 class CourseCreate(Base):
@@ -64,7 +69,7 @@ class LatestCourseFetch(BaseModel):
 class CourseDetailFetch(CourseFetch):
     student_count: int | None
     course_rating: float | None
-    categories: list[str] = []
+    categories: list[str] | list[CategoryFetch] = []
     subjects: list["SubjectFetch"] | list[str] = []
     total_revenue: float | None = None
     status: StatusEnum
@@ -75,6 +80,15 @@ class SubjectCreate(Base):
     completion_time: int
     course_id: int
     order: int
+    status: StatusEnum
+    description: str | None = None
+    objectives: str | None = None
+
+
+class SubjectUpdate(BaseModel):
+    title: str | None = None
+    course_id: int | None = None
+    order: int | None
     status: StatusEnum
     description: str | None = None
     objectives: str | None = None
@@ -227,4 +241,8 @@ class SubjectDetailedFetch(BaseModel):
     title: str
     course: BaseCourse
     completion_time: int
+    description: str
+    order: int
+    objectives: str
+    status: StatusEnum
     units: list[UnitWithContents]

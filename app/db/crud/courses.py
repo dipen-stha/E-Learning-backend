@@ -1,8 +1,8 @@
 from fastapi import UploadFile
 from sqlalchemy import exists
-from sqlalchemy.exc import NoResultFound
+from sqlalchemy.exc import NoResultFound, InvalidRequestError
 from sqlalchemy.orm import joinedload, selectinload
-from sqlmodel import Session, case, desc, distinct, func, select
+from sqlmodel import Session, case, desc, distinct, func, select, delete
 
 from app.api.v1.schemas.courses import (
     BaseCourse,
@@ -23,7 +23,7 @@ from app.api.v1.schemas.courses import (
     UnitFetch,
     UnitUpdate,
     UnitWithContents,
-    VideoTimeStamps,
+    VideoTimeStamps, CourseUpdate, SubjectUpdate,
 )
 from app.api.v1.schemas.users import ProfileSchema
 from app.db.models.common import UserSubject
@@ -159,7 +159,7 @@ def list_all_courses(db: Session) -> list[CourseDetailFetch]:
                     avatar=format_file_path(course.instructor.profile.avatar),
                 )
             ),
-            categories=[category.title for category in course.categories],
+            categories=[CategoryFetch(id=category.id, title=category.title) for category in course.categories],
             image_url=format_file_path(course.image_url),
             subjects=[subject.title for subject in course.subjects],
             status=course.status,
@@ -200,21 +200,33 @@ async def course_create(
     )
 
 
-async def course_update(course_id: int, db: Session, file: UploadFile) -> BaseCourse:
-    data = {}
-    image_path = await image_save(file)
-    data["image_url"] = str(image_path)
-    course_instance = db.get(Course, course_id)
-    if not course_instance:
-        raise NoResultFound("Course not found")
-    updated_course_instance = update_model_instance(course_instance, data)
-    db.add(updated_course_instance)
-    db.commit()
-    db.refresh(updated_course_instance)
-    return BaseCourse(
-        id=updated_course_instance.id,
-        title=updated_course_instance.title,
-    )
+async def course_update(course_id: int, course_data: CourseUpdate, db: Session, file: UploadFile | None = None) -> BaseCourse:
+    try:
+        course_instance = db.get(Course, course_id)
+        if not course_instance:
+            raise NoResultFound("Course not found")
+        payload_data = course_data.model_dump(exclude_none=True)
+        categories_id = payload_data.pop("categories_id")
+        if file:
+            image_path = await image_save(file)
+            payload_data["image_url"] = str(image_path)
+        updated_course_instance = update_model_instance(course_instance, payload_data)
+        db.add(updated_course_instance)
+
+        if categories_id:
+            db.exec(delete(CategoryCourseLink).where(CategoryCourseLink.course_id == course_id))
+            new_categories_links = [CategoryCourseLink(category_id=cat_id, course_id=course_id) for cat_id in categories_id]
+            db.add_all(new_categories_links)
+
+        db.commit()
+        db.refresh(updated_course_instance)
+        return BaseCourse(
+            id=updated_course_instance.id,
+            title=updated_course_instance.title,
+        )
+    except Exception as e:
+        db.rollback()
+        raise e
 
 
 def course_fetch_by_id(course_id: int, db: Session):
@@ -248,6 +260,7 @@ def course_fetch_by_id(course_id: int, db: Session):
         price=course.price,
         instructor=(
             ProfileSchema(
+                id=course.instructor.id,
                 name=course.instructor.profile.name,
                 dob=course.instructor.profile.dob,
                 gender=course.instructor.profile.gender,
@@ -256,7 +269,7 @@ def course_fetch_by_id(course_id: int, db: Session):
         ),
         course_rating=course_rating,
         student_count=student_count,
-        categories=[category.title for category in course.categories],
+        categories=[CategoryFetch(id=category.id, title=category.title) for category in course.categories],
         image_url=format_file_path(course.image_url),
         status=course.status,
         subjects=[
@@ -277,6 +290,10 @@ def subject_create(subject: SubjectCreate, db: Session) -> SubjectFetch:
     data = subject.model_dump()
     course_id = data.get("course_id")
     course = db.exec(select(Course).where(Course.id == course_id)).first()
+    order = data.get("order")
+    db.exec(select(Subject.id).where(Subject.course_id == course.id, Subject.order == order)).first()
+    if order:
+        raise InvalidRequestError("Another subject is already assigned to this order number.")
     if not course:
         raise NoResultFound(f"No course with id {course_id}")
     subject_instance = Subject(**data)
@@ -285,6 +302,25 @@ def subject_create(subject: SubjectCreate, db: Session) -> SubjectFetch:
     db.refresh(subject_instance)
     return SubjectFetch.model_validate(subject_instance)
 
+
+def subject_update(subject_id: int, subject: SubjectUpdate, db: Session):
+    data = subject.model_dump(exclude_none=True)
+    course_id = data.get("course_id")
+    subject = db.get(Subject, subject_id)
+    if not subject:
+        raise NoResultFound(f"No subject with id {subject_id}")
+    course = db.get(Course, course_id)
+    if not course:
+        raise NoResultFound(f"No course with id {course_id}")
+    order = data.get("order")
+    existing_instance = db.exec(select(Subject).where(Subject.course_id == course.id, Subject.order == order, Subject.id != subject_id)).first()
+    if existing_instance:
+        raise InvalidRequestError(f"{existing_instance.title} was assigned the order number {order}")
+    updated_subject_instance = update_model_instance(subject, data)
+    db.add(updated_subject_instance)
+    db.commit()
+    db.refresh(updated_subject_instance)
+    return
 
 def fetch_subjects_by_courses(
     db: Session, course_id: int | None = None
@@ -353,6 +389,10 @@ def subject_fetch_by_id(subject_id: int, db: Session):
         course=BaseCourse(
             id=subject_instance.course.id, title=subject_instance.course.title
         ),
+        order=subject_instance.order,
+        description=subject_instance.description,
+        status=subject_instance.status,
+        objectives=subject_instance.objectives,
         units=[
             UnitWithContents(
                 id=unit.id,
