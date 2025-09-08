@@ -27,7 +27,7 @@ from app.api.v1.schemas.courses import (
     SubjectFetch,
     UnitCreate,
     UnitFetch,
-    UnitUpdate, CourseUpdate,
+    UnitUpdate, CourseUpdate, SubjectUpdate,
 )
 from app.db.crud.courses import (
     content_create,
@@ -49,7 +49,7 @@ from app.db.crud.courses import (
     subject_create,
     subject_fetch_by_id,
     unit_create,
-    unit_update,
+    unit_update, subject_update,
 )
 from app.db.models.users import User
 from app.db.session.session import get_db
@@ -154,11 +154,16 @@ async def update_course(
     course_id: int,
     db: Annotated[Session, Depends(get_db)],
     course: str = Form(...),
-    file: UploadFile = File(...),
+    file: UploadFile = File(None),
 ):
     try:
         course_data = CourseUpdate(**json.loads(course))
         return await course_update(course_id, course_data, db, file)
+    except ValidationError as error:
+        return JSONResponse(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            content=jsonable_encoder({"errors": error.errors()}),
+        )
     except Exception as error:
         raise HTTPException(
             status_code=500,
@@ -193,6 +198,25 @@ def create_subject(subject: SubjectCreate, db: Annotated[Session, Depends(get_db
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@course_router.patch("/subject/{subject_id}/update/")
+def update_subject(subject_id: int, subject: SubjectUpdate, db: Annotated[Session, Depends(get_db)]):
+    try:
+        return subject_update(subject_id, subject, db)
+    except ValidationError as e:
+        return JSONResponse(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            content=jsonable_encoder({"errors": e.errors()}),
+        )
+    except Exception as error:
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error_type": error.__class__.__name__,
+                "error_message": str(error),
+            },
+        )
 
 
 @course_router.get("/subject/get/all/", response_model=list[SubjectFetch])
