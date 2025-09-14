@@ -17,6 +17,7 @@ class CategoryFetch(Base):
 
 class CourseUpdate(BaseModel):
     title: str | None = None
+    description: str | None = None
     categories_id: list[int] | None = None
     instructor_id: int | None = None
     completion_time: int | None = None
@@ -172,7 +173,7 @@ class UnitFetch(BaseUnit):
     subject: BaseSubjectFetch | str | None = None
     order: int | None
     completion_time: int
-    course: str | None = None
+    course: BaseCourse | str | None = None
     status: StatusEnum
     description: str | None
     objectives: str | None
@@ -187,6 +188,10 @@ class UnitUpdate(BaseModel):
     title: str | None = None
     subject_id: int | None = None
     order: int | None = None
+    completion_time: int | None = None
+    status: StatusEnum
+    description: str | None = None
+    objectives: str | None = None
 
 
 class BaseContent(Base):
@@ -214,7 +219,9 @@ class ContentFetch(BaseContent):
     description: str | None = None
     content_type: ContentTypeEnum
     file_url: str | None = None
-    course: str | None = None
+    course: BaseCourse | str | None = None
+    subject: BaseSubjectFetch | str | None = None
+    unit: BaseUnit | str | None = None
     instructor: ProfileSchema | None = None
     status: StatusEnum
     video_time_stamps: list["VideoTimeStamps"] = []
@@ -226,7 +233,7 @@ class ContentFetch(BaseContent):
 class VideoTimeStamps(BaseModel):
     id: int
     title: str
-    time_stamp: int
+    time_stamp: int | str
 
 
 class ContentUpdate(BaseModel):
@@ -234,6 +241,11 @@ class ContentUpdate(BaseModel):
     unit_id: int | None = None
     title: str | None = None
     order: int | None = None
+    description: str | None = None
+    content_type: ContentTypeEnum
+    file_url: str | None = None
+    status: StatusEnum
+    video_time_stamps: list[VideoTimeStamps] = []
 
 
 class SubjectDetailedFetch(BaseModel):

@@ -41,6 +41,7 @@ from app.db.models.enrollment import CourseEnrollment
 from app.db.models.users import Profile, User
 from app.services.enum.courses import PaymentStatus, StatusEnum
 from app.services.utils.crud_utils import update_model_instance
+from app.services.utils.date_utils import format_to_mm_ss, format_to_seconds
 from app.services.utils.files import format_file_path, image_save
 
 
@@ -320,7 +321,7 @@ def subject_update(subject_id: int, subject: SubjectUpdate, db: Session):
     db.add(updated_subject_instance)
     db.commit()
     db.refresh(updated_subject_instance)
-    return
+    return updated_subject_instance
 
 def fetch_subjects_by_courses(
     db: Session, course_id: int | None = None
@@ -334,7 +335,7 @@ def fetch_subjects_by_courses(
             .joinedload(Course.instructor)
             .joinedload(User.profile)
         )
-        .order_by(Subject.order)
+        .order_by(Subject.course_id, Subject.order)
     )
     if course_id:
         statement = statement.where(Subject.course_id == course_id)
@@ -357,7 +358,7 @@ def fetch_subjects_by_courses(
 def fetch_subjects_minimal(
     db: Session, course_id: int | None = None
 ) -> list[BaseSubjectFetch]:
-    statement = select(Subject.id, Subject.title)
+    statement = select(Subject.id, Subject.title).where(Subject.status == StatusEnum.PUBLISHED)
     if course_id:
         statement = statement.where(Subject.course_id == course_id)
     subjects = db.exec(statement).all()
@@ -449,24 +450,31 @@ def unit_create(unit: UnitCreate, db: Session) -> UnitFetch:
 def unit_update(unit_id: int, unit: UnitUpdate, db: Session) -> UnitFetch:
     data = unit.model_dump()
     unit_instance = db.exec(select(Unit).where(Unit.id == unit_id)).first()
+    order = data.get("order")
+    subject_id = data.get("subject_id")
     if not unit_instance:
         raise NoResultFound(f"No unit with id {unit_id}")
-    if data.get("subject_id"):
-        subject = db.get(Subject, data["subject_id"])
+    if subject_id:
+        subject = db.get(Subject, subject_id)
         if not subject:
             raise NoResultFound(f"No subject with id {unit_id}")
+    if order:
+        existing_unit_with_given_order = db.exec(select(Unit).where(Unit.order == order, Unit.subject_id == subject_id, Unit.id != unit_id)).first()
+        if existing_unit_with_given_order:
+            raise InvalidRequestError(f"Unit with order {order} already assigned to unit: {existing_unit_with_given_order.id}")
     updated_unit_instance = update_model_instance(unit_instance, data)
     db.add(updated_unit_instance)
     db.commit()
     db.refresh(updated_unit_instance)
-    return UnitFetch.from_orm(updated_unit_instance)
+    return updated_unit_instance
 
 
 def fetch_all_units(db: Session) -> list[UnitFetch]:
     statement = (
-        select(Unit, Subject.title, Course.title)
+        select(Unit, Subject, Course)
         .join(Subject, Subject.id == Unit.subject_id)
         .join(Course, Subject.course_id == Course.id)
+        .order_by(Course.id, Subject.id, Unit.order)
     )
     units = db.exec(statement).all()
     return [
@@ -483,6 +491,28 @@ def fetch_all_units(db: Session) -> list[UnitFetch]:
         )
         for unit, subject, course in units
     ]
+
+
+def fetch_unit_by_id(unit_id: int, db: Session):
+    statement = (
+        select(Unit)
+        .options(joinedload(Unit.subject).joinedload(Subject.course))
+        .where(Unit.id == unit_id)
+    )
+    unit_instance = db.exec(statement).first()
+    if not unit_instance:
+        raise NoResultFound(f"No unit with id {unit_id}")
+    return UnitFetch(
+        id=unit_instance.id,
+        title=unit_instance.title,
+        description=unit_instance.description,
+        order=unit_instance.order,
+        completion_time=unit_instance.completion_time,
+        subject=BaseSubjectFetch(id=unit_instance.subject.id, title=unit_instance.subject.title),
+        course=BaseCourse(id=unit_instance.subject.course.id, title=unit_instance.subject.course.title),
+        status=unit_instance.status,
+        objectives=unit_instance.objectives
+    )
 
 
 def fetch_units_by_subject(subject_id: int, db: Session) -> list[UnitFetch]:
@@ -516,7 +546,7 @@ async def content_create(
         ContentVideoTimeStamp(
             content_id=content_instance.id,
             title=item.get("title"),
-            time_stamp=item.get("time_stamp"),
+            time_stamp=format_to_seconds(item.get("time_stamp")),
         )
         for item in video_time_stamps
     ]
@@ -534,29 +564,56 @@ async def content_create(
     )
 
 
-def content_update(
-    content_id: int, content: ContentUpdate, db: Session
+async def content_update(
+    content_id: int, content: ContentUpdate, db: Session, file: UploadFile | None = None
 ) -> ContentFetch:
-    data = content.model_dump()
-    unit_id = data.get("unit_id")
-    content_instance = db.get(Contents, content_id)
-    if unit_id:
-        unit_instance = db.get(Unit, unit_id)
-        if not unit_instance:
-            raise NoResultFound(f"No unit with id {unit_id}")
-    updated_instance = update_model_instance(content_instance, data)
-    db.add(updated_instance)
-    db.commit()
-    db.refresh(updated_instance)
-    return ContentFetch(
-        id=content_instance.id,
-        title=content_instance.title,
-        description=content_instance.description,
-        content_type=content_instance.content_type,
-        file_url=content_instance.file_url,
-        completion_time=content_instance.completion_time,
-        order=content_instance.order,
-    )
+    try:
+        data = content.model_dump(exclude_none=True)
+        unit_id = data.get("unit_id")
+        order = data.get("order")
+        content_instance = db.get(Contents, content_id)
+        video_time_stamps = data.pop("video_time_stamps") if "video_time_stamps" in data else None
+        if unit_id:
+            unit_instance = db.get(Unit, unit_id)
+            if not unit_instance:
+                raise NoResultFound(f"No unit with id {unit_id}")
+        if order:
+            existing_content_by_order = db.exec(select(Contents).where(Contents.id != content_id, Contents.unit_id == unit_id, Contents.order == order)).all()
+            if existing_content_by_order:
+                raise InvalidRequestError(f"Content in unit {unit_id} already has a content in order {order}")
+        if file:
+            image_path = await image_save(file)
+            data["file_url"] = str(image_path)
+
+        updated_instance = update_model_instance(content_instance, data)
+        db.add(updated_instance)
+        if video_time_stamps:
+            db.exec(delete(ContentVideoTimeStamp).where(ContentVideoTimeStamp.content_id == content_id))
+            new_video_time_stamps = [
+            ContentVideoTimeStamp(
+                content_id=content_instance.id,
+                title=item.get("title"),
+                time_stamp=format_to_seconds(item.get("time_stamp")),
+            )
+            for item in video_time_stamps
+        ]
+            db.add_all(new_video_time_stamps)
+
+        db.commit()
+        db.refresh(updated_instance)
+        return ContentFetch(
+            id=content_instance.id,
+            title=content_instance.title,
+            description=content_instance.description,
+            content_type=content_instance.content_type,
+            file_url=content_instance.file_url,
+            completion_time=content_instance.completion_time,
+            order=content_instance.order,
+            status=content_instance.status,
+        )
+    except Exception as ex:
+        db.rollback()
+        raise ex
 
 
 def fetch_contents(
@@ -566,7 +623,7 @@ def fetch_contents(
     subject_id: int | None = None,
 ) -> list[ContentFetch]:
     statement = (
-        select(Contents, Course.title, User)
+        select(Contents, User)
         .join(Unit, Unit.id == Contents.unit_id)
         .join(Subject, Subject.id == Unit.subject_id)
         .join(Course, Course.id == Subject.course_id)
@@ -578,6 +635,7 @@ def fetch_contents(
             .selectinload(Course.instructor)
             .selectinload(User.profile)
         )
+        .order_by(Course.id, Unit.id, Contents.order)
     )
     if unit_id:
         statement = statement.where(Contents.unit_id == unit_id)
@@ -595,11 +653,44 @@ def fetch_contents(
             title=content.title,
             completion_time=content.completion_time,
             order=content.order,
-            course=course_title,
-            instructor=instructor.profile,
+            course=content.unit.subject.course,
+            subject=content.unit.subject,
+            unit=content.unit,
+            instructor=ProfileSchema(
+                id=instructor.id,
+                name=instructor.profile.name,
+                avatar=format_file_path(instructor.profile.avatar)
+            ),
             file_url=content.file_url,
             content_type=content.content_type,
             status=content.status,
         )
-        for content, course_title, instructor in contents
+        for content, instructor in contents
     ]
+
+
+def fetch_content_by_id(content_id: int, db: Session) -> ContentFetch:
+    statement = (
+        select(Contents)
+        .options(joinedload(Contents.unit).joinedload(Unit.subject).joinedload(Subject.course), selectinload(Contents.video_time_stamps))
+        .where(Contents.id == content_id
+    ))
+    content_instance = db.exec(statement).first()
+    return ContentFetch(
+        id=content_instance.id,
+        title=content_instance.title,
+        description=content_instance.description,
+        content_type=content_instance.content_type,
+        course=BaseCourse(id=content_instance.unit.subject.course.id, title=content_instance.unit.subject.course.title),
+        subject=BaseSubjectFetch(id=content_instance.unit.subject.id, title=content_instance.unit.subject.title),
+        unit=BaseUnit(id=content_instance.unit.id, title=content_instance.unit.title),
+        status=content_instance.status,
+        completion_time=content_instance.completion_time,
+        order=content_instance.order,
+        file_url=format_file_path(content_instance.file_url),
+        video_time_stamps=[VideoTimeStamps(
+            id=time_stamp.id,
+            title=time_stamp.title,
+            time_stamp=format_to_mm_ss(time_stamp.time_stamp),
+        ) for time_stamp in content_instance.video_time_stamps]
+    )

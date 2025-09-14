@@ -43,8 +43,8 @@ class UserUpdateSchema(BaseModel):
 class ProfileSchema(BaseModel):
     id: int  | None = None
     name: str
-    dob: date
-    gender: UserGender
+    dob: date | None = None
+    gender: UserGender | None = None
     avatar: str | None = None
     role: str | None = None
 

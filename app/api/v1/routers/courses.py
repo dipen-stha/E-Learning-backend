@@ -49,7 +49,7 @@ from app.db.crud.courses import (
     subject_create,
     subject_fetch_by_id,
     unit_create,
-    unit_update, subject_update,
+    unit_update, subject_update, fetch_unit_by_id, fetch_content_by_id,
 )
 from app.db.models.users import User
 from app.db.session.session import get_db
@@ -318,16 +318,25 @@ def create_unit(unit: UnitCreate, db: Annotated[Session, Depends(get_db)]):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@course_router.patch("/unit/update/{unit_id}/", response_model=UnitFetch)
+@course_router.patch("/unit/{unit_id}/update/")
 def update_unit(
     unit_id: int, unit: UnitUpdate, db: Annotated[Session, Depends(get_db)]
 ):
     try:
         return unit_update(unit_id, unit, db)
     except ValidationError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        return JSONResponse(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            content=jsonable_encoder({"errors": e.errors()}),
+        )
+    except Exception as error:
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error_type": error.__class__.__name__,
+                "error_message": str(error),
+            },
+        )
 
 
 @course_router.get("/unit/get_by_subject/{subject_id}/", response_model=list[UnitFetch])
@@ -356,6 +365,24 @@ def minimal_units(db: Annotated[Session, Depends(get_db)]):
             },
         )
 
+
+@course_router.get("/unit/{unit_id}/")
+def get_unit_by_id(unit_id: int, db: Annotated[Session, Depends(get_db)]):
+    try:
+        return fetch_unit_by_id(unit_id, db)
+    except ValidationError as ve:
+        return JSONResponse(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            content=jsonable_encoder({"errors": ve.errors()}),
+        )
+    except Exception as error:
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error_type": error.__class__.__name__,
+                "error_message": str(error),
+            },
+        )
 
 @course_router.get(
     "/unit/minimal/by_subject/{subject_id}/", response_model=list[BaseUnit]
@@ -414,22 +441,54 @@ async def create_content(
         )
 
 
-@course_router.patch("/content/update/{content_id}/", response_model=ContentFetch)
-def update_content(
-    content_id: int, content: ContentUpdate, db: Annotated[Session, Depends(get_db)]
+@course_router.patch("/content/{content_id}/update/", response_model=ContentFetch)
+async def update_content(
+    content_id: int, db: Annotated[Session, Depends(get_db)], content: str = Form(...), file: UploadFile = File(None)
 ):
     try:
-        return content_update(content_id, content, db)
-    except ValidationError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        data = json.loads(content)
+        content_data = ContentUpdate(**data)
+        return await content_update(content_id, content_data, db, file)
+    except ValidationError as ve:
+        return JSONResponse(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            content=jsonable_encoder({"errors": ve.errors()}),
+        )
+
     except Exception as error:
-        raise HTTPException(status_code=500, detail=str(error))
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error_type": error.__class__.__name__,
+                "error_message": str(error),
+            },
+        )
 
 
 @course_router.get("/content/fetch/all/", response_model=list[ContentFetch])
 def fetch_all_contents(db: Annotated[Session, Depends(get_db)]):
     try:
         return fetch_contents(db)
+    except ValidationError as ve:
+        return JSONResponse(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            content=jsonable_encoder({"errors": ve.errors()}),
+        )
+
+    except Exception as error:
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error_type": error.__class__.__name__,
+                "error_message": str(error),
+            },
+        )
+
+
+@course_router.get("/content/get/{content_id}/")
+def get_content_by_id(content_id: int, db: Annotated[Session, Depends(get_db)]):
+    try:
+        return fetch_content_by_id(content_id, db)
     except ValidationError as ve:
         return JSONResponse(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
