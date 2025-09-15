@@ -2,6 +2,7 @@ from datetime import date, datetime
 
 from sqlmodel import Field, Relationship, SQLModel
 
+from app.db.models.assessments import StudentAssessmentSession
 from app.db.models.common import UserCourse
 from app.db.models.courses import Course
 from app.db.models.gamification import UserAchievements, UserStreak
@@ -33,6 +34,7 @@ class User(SQLModel, BaseTimeStampMixin, table=True):
     achieved: list[UserAchievements] = Relationship(back_populates="achieved_by")
     users_streaks: list[UserStreak] = Relationship(back_populates="streak_by")
     course_enrollments: list["CourseEnrollment"] = Relationship(back_populates="user")
+    student_assessments: list["StudentAssessmentSession"] = Relationship(back_populates="student")
 
     __tablename__ = "users"
 
