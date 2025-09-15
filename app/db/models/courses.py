@@ -62,6 +62,7 @@ class Subject(SQLModel, BaseTimeStampMixin, table=True):
 
     course: Course = Relationship(back_populates="subjects")
     units: list["Unit"] = Relationship(back_populates="subject")
+    subject_assessments: list["Assessment"] = Relationship(back_populates="subject")
     # users: list["User"] = Relationship(back_populates="user_subjects", link_model=UserSubject)
 
     __tablename__ = "subjects"
