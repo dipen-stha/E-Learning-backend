@@ -1,11 +1,12 @@
-from pydantic import BaseModel, field_validator, model_validator
+from pydantic import BaseModel, field_validator, model_validator, ValidationError
 from sqlalchemy.exc import NoResultFound, InvalidRequestError
 from sqlmodel import select
 
-from app.api.v1.schemas.courses import BaseSubjectFetch
+from app.api.v1.schemas.courses import BaseSubjectFetch, BaseCourse
 from app.db.models.assessments import Assessment
 from app.db.models.courses import Subject
 from app.db.session.session import get_db
+from app.services.utils.crud_utils import validate_instances_existence, fetch_existing_order_assessments
 
 
 class AssessmentTypeCreate(BaseModel):
@@ -35,19 +36,18 @@ class AssessmentCreate(BaseModel):
     @field_validator("subject_id", mode="after")
     @classmethod
     def validate_subject_id(cls, value):
-        db = yield(get_db())
-        if not db.get(value, Subject):
-            raise NoResultFound(f"Subject with pk {value} not found")
+        subject_instance = validate_instances_existence(value, Subject)
+        if not subject_instance:
+            raise ValueError(f"Subject with pk {value} not found")
         return value
 
     @model_validator(mode="after")
     def validate_existing_order_in_subject(self):
-        db = yield(get_db())
         order = self.order
         subject_id = self.subject_id
-        existing_assessment_order = db.exec(select(Assessment).where(Assessment.subject_id == subject_id, Subject.order == order)).all()
+        existing_assessment_order = fetch_existing_order_assessments(subject_id, order)
         if existing_assessment_order:
-            raise InvalidRequestError(f"Order {order} is already assigned to another assessment in this subject.")
+            raise ValueError(f"Order {order} is already assigned to another assessment in this subject.")
         return self
 
 
@@ -63,9 +63,9 @@ class AssessmentUpdate(BaseModel):
     @field_validator("subject_id", mode="after")
     @classmethod
     def validate_subject_id(cls, value):
-        db = yield(get_db())
-        if not db.get(value, Subject):
-            raise NoResultFound(f"Subject with pk {value} not found")
+        subject_instance = validate_instances_existence(value, Subject)
+        if not subject_instance:
+            raise ValueError(f"Subject with pk {value} not found")
         return value
 
 
@@ -78,6 +78,7 @@ class AssessmentsFetch(BaseModel):
     subject: BaseSubjectFetch
     order: int
     description: str
+    course: BaseCourse
 
 
 class AssessmentMinimal(BaseModel):

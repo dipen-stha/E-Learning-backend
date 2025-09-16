@@ -4,9 +4,10 @@ from sqlmodel import Session, select
 
 from app.api.v1.schemas.assessments import AssessmentTypeCreate, AssessmentTypeUpdate, AssessmentTypeFetch, \
     AssessmentCreate, AssessmentUpdate, AssessmentsFetch
-from app.api.v1.schemas.courses import BaseSubjectFetch
+from app.api.v1.schemas.courses import BaseSubjectFetch, BaseCourse
 from app.db.models.assessments import AssessmentType, Assessment
-from app.db.models.courses import Subject
+from app.db.models.courses import Subject, Course
+from app.db.session.session import get_db
 from app.services.utils.crud_utils import update_model_instance
 
 
@@ -55,6 +56,11 @@ def fetch_all_assessment_types(db: Session):
     except Exception as e:
         raise e
 
+def fetch_assessment_type_by_id(type_id: int, db: Session):
+    type_instance = db.exec(select(AssessmentType).where(AssessmentType.id == type_id)).first()
+    return AssessmentTypeFetch(id=type_instance.id, title=type_instance.title, description=type_instance.description, icon=type_instance.icon)
+
+
 def create_assessment(assessment_create: AssessmentCreate, db: Session):
     try:
         assessment_data = assessment_create.model_dump()
@@ -69,7 +75,7 @@ def create_assessment(assessment_create: AssessmentCreate, db: Session):
 
 def update_assessment(assessment_id: int, assessment: AssessmentUpdate, db: Session):
     try:
-        assessment_instance = db.get(assessment_id, Assessment)
+        assessment_instance = db.get(Assessment, assessment_id)
         if not assessment_instance:
             raise NoResultFound(f"Assessment with pk {assessment_id} not found")
         subject_id = assessment.subject_id
@@ -91,7 +97,8 @@ def fetch_all_assessments(db: Session):
     try:
         statement = (
             select(Assessment)
-            .options(joinedload(Assessment.assessment_type), joinedload(Assessment.subject), selectinload(Assessment.questions))
+            .options(joinedload(Assessment.assessment_type), joinedload(Assessment.subject).joinedload(Subject.course), selectinload(Assessment.questions))
+            .order_by(Assessment.id.desc())
         )
         assessment_instances = db.exec(statement).all()
         return [
@@ -108,11 +115,31 @@ def fetch_all_assessments(db: Session):
                 pass_points=assessment.pass_points,
                 subject=BaseSubjectFetch(id=assessment.subject.id, title=assessment.subject.title),
                 order=assessment.order,
-                description=assessment.description
+                description=assessment.description,
+                course=BaseCourse(id=assessment.subject.course.id, title=assessment.subject.course.title)
             )
             for assessment in assessment_instances
         ]
     except Exception as e:
         raise e
 
-
+def assessment_by_id(assessment_id: int, db: Session):
+    statement = (
+        select(Assessment, AssessmentType, Course, Subject)
+        .join(Subject, Assessment.subject_id == Subject.id)
+        .join(AssessmentType, Assessment.assessment_type_id == AssessmentType.id)
+        .join(Course, Subject.course_id == Course.id)
+        .where(Assessment.id == assessment_id)
+    )
+    assessment_instance, assessment_type, course, subject = db.exec(statement).first()
+    return AssessmentsFetch(
+        id=assessment_instance.id,
+        title=assessment_instance.title,
+        assessment_type=AssessmentTypeFetch(id=assessment_type.id, title=assessment_type.title, description=assessment_type.description, icon=assessment_type.icon),
+        course=BaseCourse(id=course.id, title=course.title),
+        subject=BaseSubjectFetch(id=subject.id, title=subject.title),
+        max_points=assessment_instance.max_points,
+        pass_points=assessment_instance.pass_points,
+        order=assessment_instance.order,
+        description=assessment_instance.description
+    )
