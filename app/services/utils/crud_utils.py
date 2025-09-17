@@ -1,16 +1,16 @@
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
-from typing import Annotated
-
-from fastapi import Depends
-
 from app.db.models.assessments import Assessment
 from app.db.session.session import get_db
 
+
 db = next(get_db())
 
+
 def update_model_instance(instance: any, data: dict):
+    if "id" in data.keys():
+        data.pop("id")
     for key, value in data.items():
         setattr(instance, key, value)
     return instance
@@ -48,5 +48,10 @@ def validate_unique_field(
 def validate_instances_existence(model_id: int, model: any):
     return db.get(model, model_id)
 
+
 def fetch_existing_order_assessments(subject_id: int, order: int):
-    return db.exec(select(Assessment).where(Assessment.subject_id == subject_id, Assessment.order == order)).all()
+    return db.exec(
+        select(Assessment).where(
+            Assessment.subject_id == subject_id, Assessment.order == order
+        )
+    ).all()
