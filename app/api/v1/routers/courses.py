@@ -22,12 +22,14 @@ from app.api.v1.schemas.courses import (
     CourseCreate,
     CourseDetailFetch,
     CourseFetch,
+    CourseUpdate,
     LatestCourseFetch,
     SubjectCreate,
     SubjectFetch,
+    SubjectUpdate,
     UnitCreate,
     UnitFetch,
-    UnitUpdate, CourseUpdate, SubjectUpdate,
+    UnitUpdate,
 )
 from app.db.crud.courses import (
     content_create,
@@ -37,19 +39,22 @@ from app.db.crud.courses import (
     course_fetch_by_id,
     course_update,
     fetch_all_units,
+    fetch_content_by_id,
     fetch_contents,
     fetch_latest_courses,
     fetch_minimal_units,
     fetch_subjects_by_courses,
     fetch_subjects_minimal,
+    fetch_unit_by_id,
     fetch_units_by_subject,
     get_all_categories,
     list_all_courses,
     list_minimal_courses,
     subject_create,
     subject_fetch_by_id,
+    subject_update,
     unit_create,
-    unit_update, subject_update, fetch_unit_by_id, fetch_content_by_id,
+    unit_update,
 )
 from app.db.models.users import User
 from app.db.session.session import get_db
@@ -201,7 +206,9 @@ def create_subject(subject: SubjectCreate, db: Annotated[Session, Depends(get_db
 
 
 @course_router.patch("/subject/{subject_id}/update/")
-def update_subject(subject_id: int, subject: SubjectUpdate, db: Annotated[Session, Depends(get_db)]):
+def update_subject(
+    subject_id: int, subject: SubjectUpdate, db: Annotated[Session, Depends(get_db)]
+):
     try:
         return subject_update(subject_id, subject, db)
     except ValidationError as e:
@@ -384,6 +391,7 @@ def get_unit_by_id(unit_id: int, db: Annotated[Session, Depends(get_db)]):
             },
         )
 
+
 @course_router.get(
     "/unit/minimal/by_subject/{subject_id}/", response_model=list[BaseUnit]
 )
@@ -443,7 +451,10 @@ async def create_content(
 
 @course_router.patch("/content/{content_id}/update/", response_model=ContentFetch)
 async def update_content(
-    content_id: int, db: Annotated[Session, Depends(get_db)], content: str = Form(...), file: UploadFile = File(None)
+    content_id: int,
+    db: Annotated[Session, Depends(get_db)],
+    content: str = Form(...),
+    file: UploadFile = File(None),
 ):
     try:
         data = json.loads(content)
