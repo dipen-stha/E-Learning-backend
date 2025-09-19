@@ -21,7 +21,7 @@ def get_model_instance_by_id(model: any, instance_id: int):
     return db.get(model, instance_id)
 
 
-def create_model_instance(model: any, data: dict, db: Session):
+def create_model_instance(model: any, data: dict):
     try:
         model_instance = model(**data)
         db.add(model_instance)

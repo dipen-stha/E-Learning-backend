@@ -417,7 +417,7 @@ def minimal_units_by_subject(subject_id: int, db: Annotated[Session, Depends(get
 async def create_content(
     db: Annotated[Session, Depends(get_db)],
     content: str = Form(...),
-    file: UploadFile = File(...),
+    file: UploadFile = File(None),
 ):
     try:
         data = json.loads(content)
