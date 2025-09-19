@@ -75,6 +75,8 @@ class CourseDetailFetch(CourseFetch):
     total_revenue: float | None = None
     status: StatusEnum
     is_enrolled: bool = Field(default=False)
+    requirements: str | None = None
+    objectives: str | None = None
 
 
 class SubjectCreate(Base):

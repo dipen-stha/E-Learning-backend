@@ -2,7 +2,7 @@ from datetime import datetime
 
 from fastapi import HTTPException
 from sqlalchemy.exc import IntegrityError, NoResultFound
-from sqlalchemy.orm import contains_eager, joinedload, selectinload
+from sqlalchemy.orm import contains_eager, joinedload, selectinload, outerjoin
 from sqlalchemy.types import Integer
 from sqlmodel import Session, and_, asc, case, func, select
 from sqlmodel.sql import expression
@@ -39,7 +39,7 @@ from app.services.utils.crud_utils import create_model_instance, update_model_in
 def user_course_create(user_course: UserCourseCreate, db: Session) -> UserCourseFetch:
     try:
         data = user_course.model_dump()
-        created_user_course_instance = create_model_instance(UserCourse, data, db)
+        created_user_course_instance = create_model_instance(UserCourse, data)
         statement = (
             select(UserCourse)
             .options(
@@ -115,7 +115,7 @@ def user_course_fetch(user_id: int, db: Session) -> list[UserCourseFetch]:
             status=user_course.status,
             started_at=user_course.started_at,
             completed_at=user_course.completed_at,
-            completion_percent=(completed_subjects / total_subjects) * 100,
+            completion_percent=round((completed_subjects / total_subjects) * 100, 2),
             total_subjects=total_subjects,
             completed_subjects=completed_subjects,
             next_subject=next_subject,
@@ -125,31 +125,40 @@ def user_course_fetch(user_id: int, db: Session) -> list[UserCourseFetch]:
 
 
 def get_subject_detail_with_unit_counts(course_id: int, user_id: int, db: Session):
-    total_unit_counts = func.count(Unit.id.distinct()).label("total_units")
+    total_unit_counts = func.count(Unit.id).label("total_units")
     completed_unit_counts = func.count(
         case((UserUnit.status == CompletionStatusEnum.COMPLETED, 1), else_=None)
     ).label("completed_units")
-    # unit_completed_statement = case(
-    #     (UserUnit.status == CompletionStatusEnum.COMPLETED, True), else_=False
-    # ).label("is_completed")
-
     statement = (
         select(
             Subject.id,
             Subject.title,
             total_unit_counts,
             completed_unit_counts,
-            # unit_completed_statement,
         )
-        .join(Unit, Unit.subject_id == Subject.id)
-        .outerjoin(
-            UserUnit, (UserUnit.user_id == user_id) & (UserUnit.unit_id == Unit.id)
+        .join(Unit, Unit.subject_id == Subject.id, isouter=True)
+        .join(
+            UserUnit, (UserUnit.user_id == user_id) & (UserUnit.unit_id == Unit.id), isouter=True
         )
         .where(Subject.course_id == course_id)
         .group_by(Subject.id, Subject.title)
     )
     return db.exec(statement).all()
 
+
+def get_unit_details(subject_id: int, user_id: int, db: Session):
+    unit_completed_statement = case(
+        (UserUnit.status == CompletionStatusEnum.COMPLETED, True), else_=False
+    ).label("is_completed")
+    statement = (
+        select(
+            Unit.id, unit_completed_statement
+        )
+        .outerjoin(UserUnit, and_(UserUnit.unit_id == Unit.id, UserUnit.user_id ==user_id))
+        .where(Unit.subject_id == subject_id)
+        .group_by(Unit.id, UserUnit.status)
+    )
+    return db.exec(statement).all()
 
 def fetch_subject_status_by_course_id(course_id: int, user_id: int, db: Session):
     course = db.get(Course, course_id)
@@ -181,6 +190,12 @@ def user_course_fetch_by_id(
     subject_details = {
         subject.id: subject
         for subject in get_subject_detail_with_unit_counts(course_id, user_id, db)
+    }
+
+    units_details = {
+        unit.id: unit
+        for subject in subject_details.keys()
+        for unit in get_unit_details(subject, user_id, db)
     }
     subject_subquery = (
         (
@@ -234,7 +249,7 @@ def user_course_fetch_by_id(
         started_at=user_course.started_at,
         completed_at=user_course.completed_at,
         completion_percent=(
-            (completed_counts / total_subjects) * 100 if total_subjects else 0
+            round((completed_counts / total_subjects) * 100, 2) if total_subjects else 0
         ),
         next_subject=next_subject,
         total_subjects=total_subjects,
@@ -249,7 +264,7 @@ def user_course_fetch_by_id(
                     UserUnitDetail(
                         id=unit.id,
                         title=unit.title,
-                        # is_completed=subject_details.get(subject.id).is_completed,
+                        is_completed=units_details.get(unit.id).is_completed,
                     )
                     for unit in subject.units
                 ],
@@ -269,7 +284,7 @@ def user_course_fetch_by_id(
                         / subject_details.get(subject.id).total_units
                     )
                     * 100
-                    if subject_details.get(subject.id)
+                    if (subject_details.get(subject.id) and subject_details.get(subject.id).total_units and subject_details.get(subject.id).completed_units)
                     else 0
                 ),
             )
@@ -295,7 +310,7 @@ def user_course_update(user_course_id: int, user_course: BaseCommonUpdate, db: S
 def user_subject_create(user_subject: UserSubjectCreate, db: Session):
     try:
         data = user_subject.model_dump()
-        user_subject_instance = create_model_instance(UserSubject, data, db)
+        user_subject_instance = create_model_instance(UserSubject, data)
         return BaseCommonFetch(
             expected_completion_time=user_subject_instance.expected_completion_time,
             started_at=user_subject_instance.started_at,
@@ -453,7 +468,7 @@ def user_subject_update(
 def user_unit_create(user_unit: UserUnitCreate, db: Session):
     try:
         data = user_unit.model_dump()
-        user_unit_instance = create_model_instance(UserUnit, data, db)
+        user_unit_instance = create_model_instance(UserUnit, data)
         return user_unit_instance
 
     except IntegrityError:
@@ -590,7 +605,7 @@ def user_content_create(user_content: UserContentCreate, db: Session):
             data["unit_id"] = content_instance.unit_id
             user_unit = UserUnitCreate(**data)
             user_unit_create(user_unit, db)
-        user_content_instance = create_model_instance(UserContent, data, db)
+        user_content_instance = create_model_instance(UserContent, data)
         return user_content_instance
     except IntegrityError:
         raise HTTPException(
@@ -611,13 +626,14 @@ def user_content_status_update(user_content_data: UserContentStatusUpdate, db: S
                 UserContent.content_id == user_content_data.content_id,
             )
         ).first()
+        unit_instance = db.exec(select(Unit).where(Unit.id == content.unit_id)).first()
         if not user_content_instance:
             raise NoResultFound("User has not started this content")
         if user_content_instance.status == CompletionStatusEnum.COMPLETED:
             raise HTTPException(
                 status_code=400, detail="User has already completed this content!"
             )
-        data = user_content_data.model_dump(exclude_none=True)
+        data = user_content_data.model_dump()
         updated_user_content_instance = update_model_instance(
             user_content_instance, data
         )
@@ -640,6 +656,15 @@ def user_content_status_update(user_content_data: UserContentStatusUpdate, db: S
         if is_all_contents_completed:
             user_unit_instance.status = CompletionStatusEnum.COMPLETED
             db.add(user_unit_instance)
+            db.flush()
+            user_units = db.exec(select(UserUnit.status).where(UserUnit.unit_id == unit_instance.id, UserUnit.user_id == user_content_data.user_id)).all()
+            is_all_units_completed = all(
+                user_unit == CompletionStatusEnum.COMPLETED for user_unit in user_units
+            )
+            if is_all_units_completed:
+                user_subject_instance = db.exec(select(UserSubject).where(UserSubject.subject_id == unit_instance.subject_id, UserSubject.user_id == user_content_data.user_id)).first()
+                user_subject_instance.status = CompletionStatusEnum.COMPLETED
+                db.add(user_subject_instance)
         db.commit()
         db.refresh(updated_user_content_instance)
         return updated_user_content_instance
