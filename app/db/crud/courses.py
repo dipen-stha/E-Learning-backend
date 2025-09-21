@@ -83,11 +83,11 @@ def fetch_latest_courses(
         .select_from(Course)
         .join(CourseEnrollment, CourseEnrollment.course_id == Course.id, isouter=True)
         .join(CourseRating, CourseRating.course_id == Course.id, isouter=True)
-        .join(User, Course.instructor_id == User.id)
-        .join(Profile, User.id == Profile.id)
+        .join(User, Course.instructor_id == User.id, isouter=True)
+        .join(Profile, User.id == Profile.user_id)
         .options(selectinload(Course.instructor).selectinload(User.profile))
         .order_by(desc(Course.created_at))
-        .group_by(Course.id)
+        .group_by(Course.id, *Course.__table__.c)
     )
     if user_id:
         statement = statement.where(
@@ -216,7 +216,7 @@ async def course_update(
         course_instance = db.get(Course, course_id)
         if not course_instance:
             raise NoResultFound("Course not found")
-        payload_data = course_data.model_dump(exclude_none=True)
+        payload_data = course_data.model_dump()
         categories_id = payload_data.pop("categories_id")
         if file:
             image_path = await image_save(file)
@@ -276,6 +276,8 @@ def course_fetch_by_id(course_id: int, db: Session):
         description=course.description,
         completion_time=course.completion_time,
         price=course.price,
+        requirements=course.requirements,
+        objectives=course.objectives,
         instructor=(
             ProfileSchema(
                 id=course.instructor.id,
@@ -574,11 +576,12 @@ def fetch_minimal_units(db: Session, subject_id: int | None = None) -> list[Base
 
 
 async def content_create(
-    content: ContentCreate, db: Session, file: UploadFile
+    content: ContentCreate, db: Session, file: UploadFile | None = None
 ) -> ContentFetch:
     data = content.model_dump()
-    file_path = await image_save(file)
-    data["file_url"] = file_path
+    if file:
+        file_path = await image_save(file)
+        data["file_url"] = file_path
     video_time_stamps = data.pop("video_time_stamps")
     unit_id = data.get("unit_id")
     unit_instance = db.get(Unit, unit_id)

@@ -106,6 +106,7 @@ def fetch_user_enrollments(user_id: int, db: Session):
             instructor=course_enrollment.course.instructor.profile.name,
             total_subjects=total_subjects,
             completed_subjects=completed_subjects,
+            completion_percent=round(completed_subjects/total_subjects * 100, 2) if (completed_subjects and total_subjects) else 0
         )
         for course_enrollment, total_subjects, completed_subjects in user_enrollments
     ]
@@ -206,7 +207,7 @@ def fetch_user_enrollments_by_course(user_id: int, course_id: int, db: Session):
                         / subject_details.get(subject.id).total_units
                     )
                     * 100
-                    if subject_details.get(subject.id)
+                    if (subject_details.get(subject.id) and subject_details.get(subject.id).completed_units and subject_details.get(subject.id).total_units)
                     else 0
                 ),
             )
