@@ -19,12 +19,13 @@ from app.db.crud.assessments import (
     create_assessment_type,
     fetch_all_assessment_types,
     fetch_all_assessments,
+    fetch_assessment_by_subject_id,
     fetch_assessment_type_by_id,
     fetch_question_by_id,
     fetch_question_list,
     question_create,
     question_update,
-    update_assessment, fetch_assessment_by_subject_id,
+    update_assessment,
 )
 from app.db.session.session import get_db
 
@@ -171,6 +172,7 @@ def assessment_update(
                 "error_message": str(error),
             },
         )
+
 
 @assessments_router.get("/{subject_id}/by_subject/")
 def get_assessment_by_subject(subject_id: int, db: Annotated[Session, Depends(get_db)]):

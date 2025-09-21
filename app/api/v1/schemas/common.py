@@ -80,6 +80,8 @@ class UserCourseFetch(BaseCommonFetch):
 class UserCourseStats(BaseModel):
     courses_enrolled: int
     completed_courses: int
+    hours_learned: int
+    subject_completed: int
 
 
 class UserContentCreate(BaseCommonSchema):

@@ -9,6 +9,7 @@ from app.api.v1.routers.auth import auth_router
 from app.api.v1.routers.common import common_router
 from app.api.v1.routers.courses import course_router
 from app.api.v1.routers.enrollment import enrollment_router
+from app.api.v1.routers.gamification import gamification_router
 from app.api.v1.routers.users import user_router
 from app.db.session.initialize import init_db
 from config import settings
@@ -33,5 +34,6 @@ app.include_router(course_router)
 app.include_router(common_router)
 app.include_router(enrollment_router)
 app.include_router(assessments_router)
+app.include_router(gamification_router)
 
 app.mount("/media", StaticFiles(directory="media"), name="media")

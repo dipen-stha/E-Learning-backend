@@ -26,7 +26,7 @@ def create_model_instance(model: any, data: dict):
         model_instance = model(**data)
         db.add(model_instance)
         db.commit()
-        db.flush(model_instance)
+        db.refresh(model_instance)
         return model_instance
     except IntegrityError:
         db.rollback()
