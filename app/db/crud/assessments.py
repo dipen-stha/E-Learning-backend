@@ -18,10 +18,7 @@ from app.api.v1.schemas.assessments import (
 from app.api.v1.schemas.courses import BaseCourse, BaseSubjectFetch
 from app.db.models.assessments import Assessment, AssessmentType, Options, Question
 from app.db.models.courses import Course, Subject
-from app.services.utils.crud_utils import (
-    update_model_instance,
-    validate_instances_existence,
-)
+from app.services.utils.crud_utils import update_model_instance
 
 
 def create_assessment_type(assessment_type: AssessmentTypeCreate, db: Session):
@@ -199,9 +196,8 @@ def assessment_by_id(assessment_id: int, db: Session):
 
 
 def fetch_assessment_by_subject_id(subject_id: int, db: Session):
-    statement = (
-        select(Assessment.id, Assessment.title)
-        .where(Assessment.subject_id == subject_id)
+    statement = select(Assessment.id, Assessment.title).where(
+        Assessment.subject_id == subject_id
     )
     assessments = db.exec(statement).all()
     return [
@@ -245,14 +241,24 @@ def question_update(question_id: int, update_data: QuestionUpdate, db: Session):
         updated_instance = update_model_instance(question_instance, question_data)
         db.commit()
         if options:
-            option_instances = db.exec(select(Options.id).where(Options.question_id == question_id)).all()
-            to_update_options = [option for option in options if option.get("id") in option_instances]
-            to_delete_options = [option for option in options if option.get("id") not in option_instances]
+            option_instances = db.exec(
+                select(Options.id).where(Options.question_id == question_id)
+            ).all()
+            to_update_options = [
+                option for option in options if option.get("id") in option_instances
+            ]
+            to_delete_options = [
+                option for option in options if option.get("id") not in option_instances
+            ]
             if to_update_options:
                 option_ids = [option.get("id") for option in to_update_options]
-                to_update_options = db.exec(select(Options).where(Options.id.in_(option_ids))).all()
+                to_update_options = db.exec(
+                    select(Options).where(Options.id.in_(option_ids))
+                ).all()
                 for option in to_update_options:
-                    option_data = next((opt for opt in options if opt.get("id") == option.id), None)
+                    option_data = next(
+                        (opt for opt in options if opt.get("id") == option.id), None
+                    )
                     if option_data:
                         update_model_instance(option, option_data)
             if to_delete_options:

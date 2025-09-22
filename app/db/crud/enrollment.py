@@ -2,7 +2,7 @@ from fastapi import HTTPException
 from sqlalchemy import func
 from sqlalchemy.exc import NoResultFound
 from sqlalchemy.orm import selectinload
-from sqlmodel import Session, and_, asc, select
+from sqlmodel import Session, and_, asc, case, select
 
 from app.api.v1.schemas.courses import CourseFetch, SubjectFetch, UserUnitDetail
 from app.api.v1.schemas.enrollment import (
@@ -83,16 +83,24 @@ def fetch_user_enrollments(user_id: int, db: Session):
             func.count(UserSubject.subject_id)
             .filter(UserSubject.status == CompletionStatusEnum.COMPLETED)
             .label("completed_counts"),
+            case(
+                (UserCourse.status == CompletionStatusEnum.COMPLETED, True), else_=False
+            ).label("is_completed"),
+            case(
+                (UserCourse.status == CompletionStatusEnum.IN_PROGRESS, True),
+                else_=False,
+            ).label("is_started"),
         )
         .select_from(CourseEnrollment)
         .join(Course, CourseEnrollment.course_id == Course.id)
+        .join(UserCourse, UserCourse.course_id == Course.id, isouter=True)
         .join(Subject, Subject.course_id == Course.id)
         .outerjoin(UserSubject)
         .where(
             CourseEnrollment.user_id == user.id,
             CourseEnrollment.status == PaymentStatus.PAID,
         )
-        .group_by(CourseEnrollment.id)
+        .group_by(CourseEnrollment.id, UserCourse.status)
     )
     user_enrollments = db.exec(statement).all()
     return [
@@ -106,9 +114,15 @@ def fetch_user_enrollments(user_id: int, db: Session):
             instructor=course_enrollment.course.instructor.profile.name,
             total_subjects=total_subjects,
             completed_subjects=completed_subjects,
-            completion_percent=round(completed_subjects/total_subjects * 100, 2) if (completed_subjects and total_subjects) else 0
+            completion_percent=(
+                round(completed_subjects / total_subjects * 100, 2)
+                if (completed_subjects and total_subjects)
+                else 0
+            ),
+            is_completed=is_completed,
+            is_started=is_started,
         )
-        for course_enrollment, total_subjects, completed_subjects in user_enrollments
+        for course_enrollment, total_subjects, completed_subjects, is_completed, is_started in user_enrollments
     ]
 
 
@@ -207,7 +221,11 @@ def fetch_user_enrollments_by_course(user_id: int, course_id: int, db: Session):
                         / subject_details.get(subject.id).total_units
                     )
                     * 100
-                    if (subject_details.get(subject.id) and subject_details.get(subject.id).completed_units and subject_details.get(subject.id).total_units)
+                    if (
+                        subject_details.get(subject.id)
+                        and subject_details.get(subject.id).completed_units
+                        and subject_details.get(subject.id).total_units
+                    )
                     else 0
                 ),
             )

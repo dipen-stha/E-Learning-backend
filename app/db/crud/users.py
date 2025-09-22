@@ -31,7 +31,18 @@ def get_user_by_id(user_id: int, db: Session) -> UserFetchSchema | None:
     user = db.exec(
         select(User).options(joinedload(User.profile)).where(User.id == user_id)
     ).first()
-    return UserFetchSchema.from_orm(user)
+    return UserFetchSchema(
+        id=user.id,
+        username=user.username,
+        email=user.email,
+        profile=ProfileSchema(
+            name=user.profile.name,
+            avatar=format_file_path(user.profile.avatar),
+            gender=user.profile.gender,
+            dob=user.profile.dob,
+            role=user.profile.role,
+        ),
+    )
 
 
 def get_user_by_username(username: str, db: Session) -> User | None:
