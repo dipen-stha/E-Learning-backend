@@ -1,7 +1,7 @@
 from fastapi import UploadFile
 from sqlalchemy import exists
 from sqlalchemy.exc import InvalidRequestError, NoResultFound
-from sqlalchemy.orm import joinedload, selectinload
+from sqlalchemy.orm import contains_eager, joinedload, selectinload
 from sqlmodel import Session, case, delete, desc, distinct, func, select
 
 from app.api.v1.schemas.courses import (
@@ -27,6 +27,7 @@ from app.api.v1.schemas.courses import (
     UnitWithContents,
     VideoTimeStamps,
 )
+from app.api.v1.schemas.extras import FilterParams
 from app.api.v1.schemas.users import ProfileSchema
 from app.db.models.common import UserSubject
 from app.db.models.courses import (
@@ -42,6 +43,7 @@ from app.db.models.courses import (
 from app.db.models.enrollment import CourseEnrollment
 from app.db.models.users import Profile, User
 from app.services.enum.courses import PaymentStatus, StatusEnum
+from app.services.mixins.pagination import PaginationMixin
 from app.services.utils.crud_utils import update_model_instance
 from app.services.utils.date_utils import format_to_mm_ss, format_to_seconds
 from app.services.utils.files import format_file_path, image_save
@@ -55,9 +57,12 @@ def course_category_create(title: str, db: Session) -> CategoryFetch:
     return CategoryFetch.model_validate(category_instance)
 
 
-def get_all_categories(db: Session) -> list[CategoryFetch]:
-    categories = db.exec(select(Category)).all()
-    return [CategoryFetch.model_validate(category) for category in categories]
+def get_all_categories(db: Session, params: FilterParams | None = None):
+    paginator = PaginationMixin()
+    statement = select(Category)
+    categories = paginator.paginate_query(statement, params, db)
+    categories_data = [CategoryFetch.model_validate(category) for category in categories]
+    return paginator.paginate_response(categories_data)
 
 
 def list_minimal_courses(db: Session) -> list[BaseCourse]:
@@ -86,6 +91,7 @@ def fetch_latest_courses(
         .join(User, Course.instructor_id == User.id, isouter=True)
         .join(Profile, User.id == Profile.user_id)
         .options(selectinload(Course.instructor).selectinload(User.profile))
+        .where(Course.status == StatusEnum.PUBLISHED)
         .order_by(desc(Course.created_at))
         .group_by(Course.id, *Course.__table__.c)
     )
@@ -114,7 +120,8 @@ def fetch_latest_courses(
     ]
 
 
-def list_all_courses(db: Session) -> list[CourseDetailFetch]:
+def list_all_courses(db: Session, params: FilterParams | None = None):
+    paginator = PaginationMixin()
     student_count_expr = func.count(distinct(User.id)).label("student_count")
     rating_calculate_expr = func.avg(CourseRating.rating)
     total_revenue = (
@@ -130,7 +137,7 @@ def list_all_courses(db: Session) -> list[CourseDetailFetch]:
             )
         )
     ).label("total_revenue")
-    courses = db.exec(
+    statement = (
         select(Course, student_count_expr, rating_calculate_expr, total_revenue)
         .select_from(Course)
         .join(CourseEnrollment, CourseEnrollment.course_id == Course.id, isouter=True)
@@ -144,7 +151,8 @@ def list_all_courses(db: Session) -> list[CourseDetailFetch]:
         )
         .group_by(Course.id, Course.price)
         .order_by(student_count_expr.desc())
-    ).all()
+    )
+    courses = paginator.paginate_query(statement, params, db)
     courses_data = [
         CourseDetailFetch(
             id=course.id,
@@ -172,7 +180,7 @@ def list_all_courses(db: Session) -> list[CourseDetailFetch]:
         )
         for course, student_count, course_rating, total_revenue in courses
     ]
-    return courses_data
+    return paginator.paginate_response(courses_data)
 
 
 async def course_create(
@@ -261,13 +269,15 @@ def course_fetch_by_id(course_id: int, db: Session):
         )
         .join(CourseEnrollment, CourseEnrollment.course_id == Course.id, isouter=True)
         .join(CourseRating, CourseRating.course_id == Course.id, isouter=True)
+        .join(Subject, Subject.course_id == Course.id, isouter=True)
         .options(
             selectinload(Course.categories),
             selectinload(Course.instructor).joinedload(User.profile),
-            selectinload(Course.subjects).selectinload(Subject.units),
+            contains_eager(Course.subjects).selectinload(Subject.units),
         )
-        .where(Course.id == course_id)
-        .group_by(Course)
+        .where(Course.id == course_id, Course.status == StatusEnum.PUBLISHED)
+        .where(Subject.status == StatusEnum.PUBLISHED)
+        .group_by(Course.id, Subject.id)
     )
     course, student_count, course_rating = db.exec(statement).first()
     return CourseDetailFetch(
@@ -359,9 +369,10 @@ def subject_update(subject_id: int, subject: SubjectUpdate, db: Session):
 
 
 def fetch_subjects_by_courses(
-    db: Session, course_id: int | None = None
-) -> list[SubjectFetch]:
-
+    db: Session, course_id: int | None = None,
+    params: FilterParams | None = None
+):
+    paginator = PaginationMixin()
     statement = (
         select(Subject)
         .join(UserSubject, isouter=True)
@@ -374,7 +385,10 @@ def fetch_subjects_by_courses(
     )
     if course_id:
         statement = statement.where(Subject.course_id == course_id)
-    subjects = db.exec(statement).all()
+    if params:
+        subjects = paginator.paginate_query(statement, params, db)
+    else:
+        subjects = db.exec(statement).all()
     subjects_data = [
         SubjectFetch(
             id=subject.id,
@@ -387,7 +401,7 @@ def fetch_subjects_by_courses(
         )
         for subject in subjects
     ]
-    return subjects_data
+    return paginator.paginate_response(subjects_data) if params else subjects_data
 
 
 def fetch_subjects_minimal(
@@ -418,7 +432,7 @@ def subject_fetch_by_id(subject_id: int, db: Session):
             .selectinload(Unit.contents)
             .selectinload(Contents.video_time_stamps),
         )
-        .where(Subject.id == subject.id)
+        .where(Subject.id == subject.id, Subject.status == StatusEnum.PUBLISHED)
     )
     subject_instance = db.exec(statement).first()
     return SubjectDetailedFetch(
@@ -439,6 +453,7 @@ def subject_fetch_by_id(subject_id: int, db: Session):
                 contents=[
                     ContentFetch(
                         id=content.id,
+                        description=content.description,
                         title=content.title,
                         completion_time=content.completion_time,
                         order=content.order,
@@ -512,15 +527,16 @@ def unit_update(unit_id: int, unit: UnitUpdate, db: Session) -> UnitFetch:
     return updated_unit_instance
 
 
-def fetch_all_units(db: Session) -> list[UnitFetch]:
+def fetch_all_units(db: Session, params: FilterParams | None = None):
+    paginator = PaginationMixin()
     statement = (
         select(Unit, Subject, Course)
         .join(Subject, Subject.id == Unit.subject_id)
         .join(Course, Subject.course_id == Course.id)
         .order_by(Course.id, Subject.id, Unit.order)
     )
-    units = db.exec(statement).all()
-    return [
+    units = paginator.paginate_query(statement, params, db)
+    unit_data = [
         UnitFetch(
             id=unit.id,
             title=unit.title,
@@ -534,6 +550,7 @@ def fetch_all_units(db: Session) -> list[UnitFetch]:
         )
         for unit, subject, course in units
     ]
+    return paginator.paginate_response(unit_data)
 
 
 def fetch_unit_by_id(unit_id: int, db: Session):
@@ -683,7 +700,9 @@ def fetch_contents(
     unit_id: int | None = None,
     course_id: int | None = None,
     subject_id: int | None = None,
+    params: FilterParams | None = None
 ) -> list[ContentFetch]:
+    paginator = PaginationMixin()
     statement = (
         select(Contents, User)
         .join(Unit, Unit.id == Contents.unit_id)
@@ -708,8 +727,8 @@ def fetch_contents(
     if subject_id:
         statement = statement
 
-    contents = db.exec(statement).all()
-    return [
+    contents = paginator.paginate_query(statement, params, db)
+    content_data = [
         ContentFetch(
             id=content.id,
             title=content.title,
@@ -729,6 +748,7 @@ def fetch_contents(
         )
         for content, instructor in contents
     ]
+    return paginator.paginate_response(content_data)
 
 
 def fetch_content_by_id(content_id: int, db: Session) -> ContentFetch:

@@ -10,7 +10,9 @@ class Achievements(SQLModel, table=True):
     description: str | None
     is_expirable: bool = Field(default=False)
     is_active: bool = Field(default=True)
-
+    streak_type_id: int | None = Field(
+        foreign_key="streak_types.id", nullable=True, default=None
+    )
     achievements_users: list["UserAchievements"] = Relationship(
         back_populates="achievement_type"
     )
