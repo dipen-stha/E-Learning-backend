@@ -21,7 +21,6 @@ from app.api.v1.schemas.courses import (
     ContentFetch,
     ContentUpdate,
     CourseCreate,
-    CourseDetailFetch,
     CourseFetch,
     CourseUpdate,
     LatestCourseFetch,
@@ -75,7 +74,9 @@ def create_category(data: Base, db: Annotated[Session, Depends(get_db)]):
 
 
 @course_router.get("/category/get/")
-def get_categories(db: Annotated[Session, Depends(get_db)], params: Annotated[FilterParams, Query()]):
+def get_categories(
+    db: Annotated[Session, Depends(get_db)], params: Annotated[FilterParams, Query()]
+):
     try:
         return get_all_categories(db, params=params)
     except Exception as error:
@@ -105,7 +106,9 @@ def get_latest_courses(
 
 
 @course_router.get("/get/all/")
-def get_all_courses(db: Annotated[Session, Depends(get_db)], params: Annotated[FilterParams, Query()]):
+async def get_all_courses(
+    db: Annotated[Session, Depends(get_db)], params: Annotated[FilterParams, Query()]
+):
     try:
         return list_all_courses(db, params=params)
     except ValidationError as error:
@@ -229,7 +232,10 @@ def update_subject(
 
 
 @course_router.get("/subject/get/all/", response_model=list[SubjectFetch])
-def list_all_subjects(db: Annotated[Session, Depends(get_db)], params: Annotated[FilterParams, Query()] = None):
+def list_all_subjects(
+    db: Annotated[Session, Depends(get_db)],
+    params: Annotated[FilterParams, Query()] = None,
+):
     try:
         return fetch_subjects_by_courses(db, params=params)
     except ValidationError as ve:
@@ -296,7 +302,9 @@ def list_subjects_minimal(course_id: int, db: Annotated[Session, Depends(get_db)
 
 
 @course_router.get("/unit/get/all/")
-def list_all_units(db: Annotated[Session, Depends(get_db)], params: Annotated[FilterParams, Query()]):
+def list_all_units(
+    db: Annotated[Session, Depends(get_db)], params: Annotated[FilterParams, Query()]
+):
     try:
         return fetch_all_units(db, params=params)
     except ValidationError as ve:
@@ -479,7 +487,9 @@ async def update_content(
 
 
 @course_router.get("/content/fetch/all/")
-def fetch_all_contents(db: Annotated[Session, Depends(get_db)], params: Annotated[FilterParams, Query()]):
+def fetch_all_contents(
+    db: Annotated[Session, Depends(get_db)], params: Annotated[FilterParams, Query()]
+):
     try:
         return fetch_contents(db, params=params)
     except ValidationError as ve:

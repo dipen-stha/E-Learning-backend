@@ -2,7 +2,12 @@ from datetime import datetime
 
 from fastapi import HTTPException
 from sqlalchemy.exc import IntegrityError, NoResultFound
-from sqlalchemy.orm import contains_eager, joinedload, selectinload
+from sqlalchemy.orm import (
+    contains_eager,
+    joinedload,
+    selectinload,
+    with_loader_criteria,
+)
 from sqlalchemy.types import Integer
 from sqlmodel import Session, and_, asc, case, func, select
 from sqlmodel.sql import expression
@@ -221,11 +226,11 @@ def user_course_fetch_by_id(
         .options(
             selectinload(UserCourse.user).selectinload(User.profile),
             selectinload(UserCourse.course)
-            .contains_eager(Course.subjects)
+            .selectinload(Course.subjects)
             .selectinload(Subject.units),
+            with_loader_criteria(Subject, Subject.status == StatusEnum.PUBLISHED),
         )
         .where(UserCourse.user_id == user_id, UserCourse.course_id == course_id)
-        .where(Subject.status == StatusEnum.PUBLISHED)
         .group_by(UserCourse.user_id, UserCourse.course_id)
     )
     user_course_exc = db.exec(main_statement).first()
@@ -676,6 +681,7 @@ def user_content_status_update(user_content_data: UserContentStatusUpdate, db: S
                 UserContent.content_id == user_content_data.content_id,
             )
         ).all()
+        course_completed = False
         is_all_contents_completed = all(
             item == CompletionStatusEnum.COMPLETED for item in unit_contents
         )
@@ -727,10 +733,12 @@ def user_content_status_update(user_content_data: UserContentStatusUpdate, db: S
                     ).first()
                     user_course.status = CompletionStatusEnum.COMPLETED
                     user_course.completed_at = datetime.now()
+                    course_completed = True
                     db.add(user_course)
+                    db.flush()
         db.commit()
         db.refresh(updated_user_content_instance)
-        return updated_user_content_instance
+        return True, course_completed
     except Exception as e:
         db.rollback()
         raise e

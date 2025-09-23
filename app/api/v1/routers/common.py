@@ -319,8 +319,8 @@ def update_user_content_status(
 ):
     try:
         user_content.user_id = user.id
-        user_content_status_update(user_content, db)
-        return {"status": "updated"}
+        _, course_completed = user_content_status_update(user_content, db)
+        return {"status": "updated", "completed": course_completed}
     except Exception as error:
         raise HTTPException(
             status_code=500,

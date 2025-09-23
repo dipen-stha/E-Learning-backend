@@ -3,6 +3,7 @@ from datetime import datetime
 from pydantic import BaseModel, Field
 
 from app.api.v1.schemas.users import UserFetchSchema
+from app.services.enum.extras import AchievementRuleSet
 
 
 class StreakTypeCreate(BaseModel):
@@ -42,6 +43,8 @@ class AchievementCreate(BaseModel):
     title: str
     icon: str
     description: str
+    rule_type: AchievementRuleSet | None = None
+    threshold: int | None = None
     is_expirable: bool = False
     is_active: bool
     streak_type_id: int | None = None
@@ -51,6 +54,8 @@ class AchievementUpdate(BaseModel):
     title: str | None = None
     icon: str | None = None
     description: str | None = None
+    rule_type: AchievementRuleSet | None = None
+    threshold: int | None = None
     is_expirable: bool | None = None
     is_active: bool | None = None
     streak_type_id: int | None = None

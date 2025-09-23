@@ -6,11 +6,12 @@ from sqlmodel import Session, select
 from app.api.v1.schemas.gamification import (
     AchievementCreate,
     AchievementFetch,
+    AchievementUpdate,
     AllUserAchievements,
     StreakTypeCreate,
     StreakTypeFetch,
     StreakTypeUpdate,
-    UserStreakCreate, AchievementUpdate,
+    UserStreakCreate,
 )
 from app.db.models.gamification import (
     Achievements,
@@ -19,7 +20,9 @@ from app.db.models.gamification import (
     UserStreak,
 )
 from app.db.models.users import User
+from app.services.enum.extras import AchievementRuleSet
 from app.services.utils.crud_utils import (
+    map_model_with_type,
     update_model_instance,
     validate_instances_existence,
 )
@@ -227,11 +230,9 @@ def create_user_achievement(
         db.rollback()
         raise e
 
+
 def fetch_achievement_by_id(achievement_id: int, db: Session):
-    statement = (
-        select(Achievements)
-        .where(Achievements.id == achievement_id)
-    )
+    statement = select(Achievements).where(Achievements.id == achievement_id)
     achievement = db.exec(statement).first()
     return AchievementFetch.model_validate(achievement)
 
@@ -243,4 +244,43 @@ def fetch_all_user_achievements(user_id: int, db: Session):
         ).first()
         return AllUserAchievements(streak=user_streak)
     except Exception as e:
+        raise e
+
+
+def check_and_create_user_achievements(
+    rule_type: AchievementRuleSet, user_id: int, db: Session
+):
+    try:
+        achievements = db.exec(
+            select(Achievements.id, Achievements.threshold).where(
+                Achievements.rule_type == rule_type
+            )
+        ).all()
+        common_model_data, data_count = map_model_with_type(rule_type, user_id)
+        eligible_achievements_ids = [
+            key for key, value in achievements if value <= data_count
+        ]
+        existing_user_achievements = db.exec(
+            select(UserAchievements.id)
+            .join(Achievements, Achievements.id == UserAchievements.achievement_type_id)
+            .where(
+                UserAchievements.achieved_by_id == user_id,
+                Achievements.rule_type == rule_type,
+            )
+        ).all()
+        remaining_achievements = set(eligible_achievements_ids) - set(
+            existing_user_achievements
+        )
+        new_user_achievements = [
+            UserAchievements(
+                achieved_by_id=user_id,
+                achievement_type_id=ach_id,
+                achieved_at=datetime.now(),
+            )
+            for ach_id in remaining_achievements
+        ]
+        db.add_all(new_user_achievements)
+        db.commit()
+    except Exception as e:
+        db.rollback()
         raise e

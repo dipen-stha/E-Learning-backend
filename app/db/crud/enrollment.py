@@ -1,7 +1,7 @@
 from fastapi import HTTPException
 from sqlalchemy import func
 from sqlalchemy.exc import NoResultFound
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import selectinload, with_loader_criteria
 from sqlmodel import Session, and_, asc, case, select
 
 from app.api.v1.schemas.courses import CourseFetch, SubjectFetch, UserUnitDetail
@@ -169,6 +169,7 @@ def fetch_user_enrollments_by_course(user_id: int, course_id: int, db: Session):
             selectinload(CourseEnrollment.course)
             .contains_eager(Course.subjects)
             .selectinload(Subject.units),
+            with_loader_criteria(Subject, Subject.status == StatusEnum.PUBLISHED),
         )
         .where(
             CourseEnrollment.user_id == user_id,
