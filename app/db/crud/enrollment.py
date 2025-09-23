@@ -15,7 +15,7 @@ from app.db.models.common import UserCourse, UserSubject
 from app.db.models.courses import Course, Subject
 from app.db.models.enrollment import CourseEnrollment
 from app.db.models.users import User
-from app.services.enum.courses import CompletionStatusEnum, PaymentStatus
+from app.services.enum.courses import CompletionStatusEnum, PaymentStatus, StatusEnum
 from app.services.utils.crud_utils import update_model_instance
 from app.services.utils.files import format_file_path
 
@@ -100,6 +100,7 @@ def fetch_user_enrollments(user_id: int, db: Session):
             CourseEnrollment.user_id == user.id,
             CourseEnrollment.status == PaymentStatus.PAID,
         )
+        .where(Subject.status == StatusEnum.PUBLISHED)
         .group_by(CourseEnrollment.id, UserCourse.status)
     )
     user_enrollments = db.exec(statement).all()
@@ -166,7 +167,7 @@ def fetch_user_enrollments_by_course(user_id: int, course_id: int, db: Session):
         .options(
             selectinload(CourseEnrollment.user).selectinload(User.profile),
             selectinload(CourseEnrollment.course)
-            .selectinload(Course.subjects)
+            .contains_eager(Course.subjects)
             .selectinload(Subject.units),
         )
         .where(
@@ -174,6 +175,7 @@ def fetch_user_enrollments_by_course(user_id: int, course_id: int, db: Session):
             CourseEnrollment.course_id == course.id,
             CourseEnrollment.status == PaymentStatus.PAID,
         )
+        .where(Subject.status == StatusEnum.PUBLISHED)
         .group_by(CourseEnrollment.id)
     )
     enrollment = db.exec(statement).first()

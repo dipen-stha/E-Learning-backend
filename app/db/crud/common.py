@@ -31,9 +31,8 @@ from app.api.v1.schemas.courses import BaseSubjectFetch, SubjectFetch, UserUnitD
 from app.db.models.common import UserContent, UserCourse, UserSubject, UserUnit
 from app.db.models.courses import Contents, Course, Subject, Unit
 from app.db.models.enrollment import CourseEnrollment
-from app.db.models.gamification import UserStreak
 from app.db.models.users import User
-from app.services.enum.courses import CompletionStatusEnum
+from app.services.enum.courses import CompletionStatusEnum, StatusEnum
 from app.services.utils.crud_utils import create_model_instance, update_model_instance
 
 
@@ -161,7 +160,7 @@ def fetch_subject_status_by_course_id(course_id: int, user_id: int, db: Session)
             and_(UserSubject.subject_id == Subject.id, UserSubject.user_id == user_id),
             isouter=True,
         )
-        .where(Subject.course_id == course_id)
+        .where(Subject.course_id == course_id, Subject.status == StatusEnum.PUBLISHED)
     )
     subject_statuses = db.exec(statement).all()
     return [
@@ -201,6 +200,7 @@ def user_course_fetch_by_id(
             Subject.order is not None,
             # UserSubject.completed_at is None,
             Subject.course_id == course_id,
+            Subject.status == StatusEnum.PUBLISHED,
         )
         .order_by(Subject.order)
         .limit(1)
@@ -216,15 +216,16 @@ def user_course_fetch_by_id(
             subject_subquery.label("next_subject"),
         )
         .join(Course, Course.id == UserCourse.course_id)
-        .join(Subject)
+        .join(Subject, Subject.course_id == Course.id)
         .outerjoin(UserSubject, Subject.id == UserSubject.subject_id)
         .options(
             selectinload(UserCourse.user).selectinload(User.profile),
             selectinload(UserCourse.course)
-            .selectinload(Course.subjects)
+            .contains_eager(Course.subjects)
             .selectinload(Subject.units),
         )
         .where(UserCourse.user_id == user_id, UserCourse.course_id == course_id)
+        .where(Subject.status == StatusEnum.PUBLISHED)
         .group_by(UserCourse.user_id, UserCourse.course_id)
     )
     user_course_exc = db.exec(main_statement).first()
@@ -333,6 +334,7 @@ def fetch_user_upcoming_subjects(db: Session, user_id: int | None = None):
                 UserSubject.user_id == user_id,
                 Subject.course_id == course_id,
                 UserSubject.status == CompletionStatusEnum.COMPLETED,
+                Subject.status == StatusEnum.PUBLISHED,
             )
             .order_by(Subject.order.desc())
             .limit(1)
@@ -343,6 +345,7 @@ def fetch_user_upcoming_subjects(db: Session, user_id: int | None = None):
                 .where(
                     Subject.order > last_completed_subject.order,
                     Subject.course_id == course_id,
+                    Subject.status == StatusEnum.PUBLISHED,
                 )
                 .order_by(asc(Subject.order))
                 .limit(1)
@@ -350,7 +353,10 @@ def fetch_user_upcoming_subjects(db: Session, user_id: int | None = None):
         else:
             next_subject = db.exec(
                 select(Subject)
-                .where(Subject.course_id == course_id)
+                .where(
+                    Subject.course_id == course_id,
+                    Subject.status == StatusEnum.PUBLISHED,
+                )
                 .order_by(asc(Subject.order))
                 .limit(1)
             ).first()
@@ -656,6 +662,7 @@ def user_content_status_update(user_content_data: UserContentStatusUpdate, db: S
         updated_user_content_instance = update_model_instance(
             user_content_instance, data
         )
+        updated_user_content_instance.completed_at = datetime.now()
         db.add(updated_user_content_instance)
         user_unit_instance = db.exec(
             select(UserUnit).where(
@@ -688,7 +695,10 @@ def user_content_status_update(user_content_data: UserContentStatusUpdate, db: S
             )
             if is_all_units_completed:
                 subject_instance = db.exec(
-                    select(Subject).where(Subject.id == unit_instance.subject_id)
+                    select(Subject).where(
+                        Subject.id == unit_instance.subject_id,
+                        Subject.status == StatusEnum.PUBLISHED,
+                    )
                 ).first()
                 user_subject_instance = db.exec(
                     select(UserSubject).where(
@@ -701,14 +711,12 @@ def user_content_status_update(user_content_data: UserContentStatusUpdate, db: S
                 db.add(user_subject_instance)
                 db.flush()
                 user_subjects = db.exec(
-                    select(UserSubject).where(
+                    select(UserSubject.status).where(
                         UserSubject.subject_id == subject_instance.id
                     )
                 ).all()
                 is_all_subjects_completed = all(
-                    user_subject
-                    == user_subject.status
-                    == CompletionStatusEnum.COMPLETED
+                    user_subject == CompletionStatusEnum.COMPLETED
                     for user_subject in user_subjects
                 )
                 if is_all_subjects_completed:

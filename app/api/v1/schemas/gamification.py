@@ -2,7 +2,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
-from app.api.v1.schemas.users import ProfileSchema, UserFetchSchema
+from app.api.v1.schemas.users import UserFetchSchema
 
 
 class StreakTypeCreate(BaseModel):
@@ -26,7 +26,7 @@ class UserStreakCreate(BaseModel):
     streak_type_id: int
     current_streak: int
     longest_streak: int
-    last_action:datetime = Field(default_factory=datetime.now)
+    last_action: datetime = Field(default_factory=datetime.now)
 
 
 class UserStreak(BaseModel):
@@ -37,3 +37,39 @@ class UserStreak(BaseModel):
     longest_streak: int
     last_action: datetime
 
+
+class AchievementCreate(BaseModel):
+    title: str
+    icon: str
+    description: str
+    is_expirable: bool = False
+    is_active: bool
+    streak_type_id: int | None = None
+
+
+class AchievementUpdate(BaseModel):
+    title: str | None = None
+    icon: str | None = None
+    description: str | None = None
+    is_expirable: bool | None = None
+    is_active: bool | None = None
+    streak_type_id: int | None = None
+
+
+class AchievementFetch(AchievementCreate):
+    id: int
+
+    class Config:
+        from_attributes = True
+
+
+class UserAchievementsFetch(BaseModel):
+    id: int
+    achieved_by: UserFetchSchema
+    achievement_type: AchievementFetch
+    achieved_at: datetime
+
+
+class AllUserAchievements(BaseModel):
+    streak: int
+    achievements: list[UserAchievementsFetch] = []
