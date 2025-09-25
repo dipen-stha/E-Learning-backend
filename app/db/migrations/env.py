@@ -9,7 +9,15 @@ from alembic import context
 
 from config import settings
 
-from app.db.models import assessments, common, courses, users, gamification
+from app.db.models import (
+    assessments,
+    common,
+    courses,
+    users,
+    gamification,
+    notifications,
+    enrollment,
+)
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

@@ -1,7 +1,7 @@
 from fastapi import UploadFile
 from sqlalchemy import exists
 from sqlalchemy.exc import InvalidRequestError, NoResultFound
-from sqlalchemy.orm import contains_eager, joinedload, selectinload
+from sqlalchemy.orm import joinedload, selectinload, with_loader_criteria
 from sqlmodel import Session, case, delete, desc, distinct, func, select
 
 from app.api.v1.schemas.courses import (
@@ -59,10 +59,20 @@ def course_category_create(title: str, db: Session) -> CategoryFetch:
 
 def get_all_categories(db: Session, params: FilterParams | None = None):
     paginator = PaginationMixin()
+    is_paginated = bool(params.offset and params.limit and params.page)
     statement = select(Category)
-    categories = paginator.paginate_query(statement, params, db)
-    categories_data = [CategoryFetch.model_validate(category) for category in categories]
-    return paginator.paginate_response(categories_data)
+    if is_paginated:
+        categories = paginator.paginate_query(statement, params, db)
+    else:
+        categories = db.exec(statement).all()
+    categories_data = [
+        CategoryFetch.model_validate(category) for category in categories
+    ]
+    return (
+        paginator.paginate_response(categories_data)
+        if is_paginated
+        else categories_data
+    )
 
 
 def list_minimal_courses(db: Session) -> list[BaseCourse]:
@@ -122,6 +132,7 @@ def fetch_latest_courses(
 
 def list_all_courses(db: Session, params: FilterParams | None = None):
     paginator = PaginationMixin()
+    is_paginated = bool(params.offset and params.limit and params.page)
     student_count_expr = func.count(distinct(User.id)).label("student_count")
     rating_calculate_expr = func.avg(CourseRating.rating)
     total_revenue = (
@@ -152,7 +163,11 @@ def list_all_courses(db: Session, params: FilterParams | None = None):
         .group_by(Course.id, Course.price)
         .order_by(student_count_expr.desc())
     )
-    courses = paginator.paginate_query(statement, params, db)
+    if is_paginated:
+        courses = paginator.paginate_query(statement, params, db)
+    else:
+        courses = db.exec(statement).all()
+
     courses_data = [
         CourseDetailFetch(
             id=course.id,
@@ -180,7 +195,7 @@ def list_all_courses(db: Session, params: FilterParams | None = None):
         )
         for course, student_count, course_rating, total_revenue in courses
     ]
-    return paginator.paginate_response(courses_data)
+    return paginator.paginate_response(courses_data) if is_paginated else courses_data
 
 
 async def course_create(
@@ -256,8 +271,8 @@ async def course_update(
 
 
 def course_fetch_by_id(course_id: int, db: Session):
-    course = db.get(Course, course_id)
-    if not course:
+    course_instance = db.get(Course, course_id)
+    if not course_instance:
         raise NoResultFound(f"Course with pk {course_id} not found")
     statement = (
         select(
@@ -273,10 +288,11 @@ def course_fetch_by_id(course_id: int, db: Session):
         .options(
             selectinload(Course.categories),
             selectinload(Course.instructor).joinedload(User.profile),
-            contains_eager(Course.subjects).selectinload(Subject.units),
+            selectinload(Course.subjects).selectinload(Subject.units),
+            with_loader_criteria(Subject, Subject.status == StatusEnum.PUBLISHED),
         )
         .where(Course.id == course_id, Course.status == StatusEnum.PUBLISHED)
-        .where(Subject.status == StatusEnum.PUBLISHED)
+        # .where(Subject.status == StatusEnum.PUBLISHED)
         .group_by(Course.id, Subject.id)
     )
     course, student_count, course_rating = db.exec(statement).first()
@@ -324,10 +340,10 @@ def subject_create(subject: SubjectCreate, db: Session) -> SubjectFetch:
     course_id = data.get("course_id")
     course = db.exec(select(Course).where(Course.id == course_id)).first()
     order = data.get("order")
-    db.exec(
+    existing_order = db.exec(
         select(Subject.id).where(Subject.course_id == course.id, Subject.order == order)
     ).first()
-    if order:
+    if existing_order:
         raise InvalidRequestError(
             "Another subject is already assigned to this order number."
         )
@@ -369,10 +385,10 @@ def subject_update(subject_id: int, subject: SubjectUpdate, db: Session):
 
 
 def fetch_subjects_by_courses(
-    db: Session, course_id: int | None = None,
-    params: FilterParams | None = None
+    db: Session, course_id: int | None = None, params: FilterParams | None = None
 ):
     paginator = PaginationMixin()
+    is_paginated = bool(params.offset and params.limit and params.page)
     statement = (
         select(Subject)
         .join(UserSubject, isouter=True)
@@ -385,7 +401,7 @@ def fetch_subjects_by_courses(
     )
     if course_id:
         statement = statement.where(Subject.course_id == course_id)
-    if params:
+    if is_paginated:
         subjects = paginator.paginate_query(statement, params, db)
     else:
         subjects = db.exec(statement).all()
@@ -401,7 +417,7 @@ def fetch_subjects_by_courses(
         )
         for subject in subjects
     ]
-    return paginator.paginate_response(subjects_data) if params else subjects_data
+    return paginator.paginate_response(subjects_data) if is_paginated else subjects_data
 
 
 def fetch_subjects_minimal(
@@ -700,7 +716,7 @@ def fetch_contents(
     unit_id: int | None = None,
     course_id: int | None = None,
     subject_id: int | None = None,
-    params: FilterParams | None = None
+    params: FilterParams | None = None,
 ) -> list[ContentFetch]:
     paginator = PaginationMixin()
     statement = (

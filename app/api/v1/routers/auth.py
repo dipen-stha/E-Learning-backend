@@ -10,6 +10,7 @@ from app.api.v1.schemas.users import UserFetchSchema
 from app.db.crud.users import get_user_by_id, update_user_login
 from app.db.models.users import User
 from app.db.session.session import get_db
+from app.services.auth.authform import UserLoginForm
 from app.services.auth.core import (
     authenticate_user,
     create_access_token,
@@ -24,17 +25,22 @@ auth_router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 @auth_router.post("/login/", response_model=Token)
 def login(
-    data: Annotated[OAuth2PasswordRequestForm, Depends()],
+    data: Annotated[UserLoginForm, Depends()],
     db: Annotated[Session, Depends(get_db)],
 ):
     try:
+        should_remember = data.should_remember
         user, _ = authenticate_user(data.username, data.password, db)
         if not user:
             raise HTTPException(
                 status_code=401, detail="Incorrect username or password"
             )
         access_token, refresh_token = create_tokens(
-            data={"sub": user.username, "scopes": data.scopes},
+            data={
+                "sub": user.username,
+                "scopes": data.scopes,
+                "should_remember": should_remember,
+            },
         )
         _ = update_user_login(user, db)
         return Token(

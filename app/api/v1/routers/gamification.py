@@ -6,20 +6,30 @@ from pydantic import ValidationError
 from sqlmodel import Session
 from starlette.responses import JSONResponse
 
-from app.api.v1.schemas.gamification import StreakTypeCreate, StreakTypeUpdate, AchievementCreate, AchievementUpdate
+from app.api.v1.schemas.gamification import (
+    AchievementCreate,
+    AchievementUpdate,
+    StreakTypeCreate,
+    StreakTypeUpdate,
+)
 from app.db.crud.gamification import (
+    check_and_create_user_achievements,
+    create_achievement_type,
     create_or_update_user_streak,
     create_streak_type,
+    fetch_achievement_by_id,
+    fetch_all_achievements,
     fetch_all_streak_types,
     fetch_all_user_achievements,
     fetch_streak_type_by_id,
     remove_streak_type,
-    update_streak_type, fetch_all_achievements, fetch_achievement_by_id, create_achievement_type,
     update_achievement_type,
+    update_streak_type,
 )
 from app.db.models.users import User
 from app.db.session.session import get_db
 from app.services.auth.core import get_current_user
+from app.services.enum.extras import AchievementRuleSet
 
 
 gamification_router = APIRouter(prefix="/gamification", tags=["Gamification"])
@@ -192,7 +202,9 @@ def achievement_by_id(achievement_id: int, db: Annotated[Session, Depends(get_db
 
 
 @gamification_router.post("/achievements/create/")
-def achievement_create(achievement: AchievementCreate, db: Annotated[Session, Depends(get_db)]):
+def achievement_create(
+    achievement: AchievementCreate, db: Annotated[Session, Depends(get_db)]
+):
     try:
         return create_achievement_type(achievement, db)
     except ValidationError as error:
@@ -212,7 +224,11 @@ def achievement_create(achievement: AchievementCreate, db: Annotated[Session, De
 
 
 @gamification_router.patch("/achievements/{achievement_id}/update/")
-def update_achievement(achievement_id: int, achievement: AchievementUpdate, db: Annotated[Session, Depends(get_db)]):
+def update_achievement(
+    achievement_id: int,
+    achievement: AchievementUpdate,
+    db: Annotated[Session, Depends(get_db)],
+):
     try:
         update_achievement_type(achievement_id, achievement, db)
     except ValidationError as error:
@@ -238,6 +254,30 @@ def fetch_user_achievements(
 ):
     try:
         return fetch_all_user_achievements(user.id, db)
+    except ValidationError as error:
+        return JSONResponse(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            content=jsonable_encoder({"errors": error.errors()}),
+        )
+
+    except Exception as error:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "error_type": error.__class__.__name__,
+                "error_message": str(error),
+            },
+        )
+
+
+@gamification_router.post("/user-achievements/check-create/")
+def user_achievements_create_or_update(
+    rule_type: AchievementRuleSet,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(get_current_user)],
+):
+    try:
+        return check_and_create_user_achievements(rule_type, user.id, db)
     except ValidationError as error:
         return JSONResponse(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,

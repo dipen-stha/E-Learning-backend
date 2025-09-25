@@ -2,12 +2,16 @@ from datetime import datetime
 
 from sqlmodel import Field, Relationship, SQLModel
 
+from app.services.enum.extras import AchievementRuleSet
+
 
 class Achievements(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True, index=True)
     title: str = Field(max_length=255)
     icon: str = Field(max_length=50)
     description: str | None
+    rule_type: AchievementRuleSet | None = Field(default=None, nullable=True)
+    threshold: int | None = Field(ge=0, default=None, nullable=True)
     is_expirable: bool = Field(default=False)
     is_active: bool = Field(default=True)
     streak_type_id: int | None = Field(
