@@ -627,7 +627,7 @@ async def content_create(
         ContentVideoTimeStamp(
             content_id=content_instance.id,
             title=item.get("title"),
-            time_stamp=format_to_seconds(item.get("time_stamp")),
+            time_stamp=item.get("time_stamp"),
         )
         for item in video_time_stamps
     ]

@@ -3,7 +3,7 @@ from datetime import date
 from pydantic import BaseModel, model_validator
 from pydantic_core import ValidationError
 
-from app.services.enum.users import UserGender
+from app.services.enum.users import UserGender, UserRole
 
 
 class UserCreateSchema(BaseModel):
@@ -15,6 +15,7 @@ class UserCreateSchema(BaseModel):
     gender: UserGender
     dob: date | None = None
     is_active: bool | None = None
+    role: UserRole | None = None
 
     @model_validator(mode="after")
     def validate_passwords(self):
